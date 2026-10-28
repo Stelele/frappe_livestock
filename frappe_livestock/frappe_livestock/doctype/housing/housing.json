@@ -1,0 +1,88 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "autoname": "field:housing_name",
+ "creation": "2026-10-28 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "housing_name",
+  "housing_type",
+  "capacity",
+  "status",
+  "last_used_date",
+  "last_cleaned_date",
+  "regions"
+ ],
+ "fields": [
+  {
+   "fieldname": "housing_name",
+   "fieldtype": "Data",
+   "label": "Housing Name",
+   "reqd": 1,
+   "unique": 1
+  },
+  {
+   "fieldname": "housing_type",
+   "fieldtype": "Select",
+   "label": "Housing Type",
+   "options": "Brooding\nGrower\nFinisher\nGeneral"
+  },
+  {
+   "fieldname": "capacity",
+   "fieldtype": "Int",
+   "label": "Capacity"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Occupied\nResting\nReady",
+   "default": "Ready"
+  },
+  {
+   "fieldname": "last_used_date",
+   "fieldtype": "Date",
+   "label": "Last Used Date"
+  },
+  {
+   "fieldname": "last_cleaned_date",
+   "fieldtype": "Date",
+   "label": "Last Cleaned Date"
+  },
+  {
+   "fieldname": "regions",
+   "fieldtype": "Table",
+   "label": "Regions",
+   "options": "Housing Region"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 0,
+ "links": [],
+ "modified": "2026-10-28 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Frappe Livestock",
+ "name": "Housing",
+ "naming_rule": "By fieldname",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "housing_name",
+ "sort_order": "ASC",
+ "states": [],
+ "title_field": "housing_name",
+ "track_changes": 0
+}
