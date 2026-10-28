@@ -50,9 +50,13 @@ class TestFullPurchase(IntegrationTestCase):
 		self.assertEqual(frappe.db.get_value("Purchase Receipt", res["purchase_receipt"], "docstatus"), 1)
 		self.assertEqual(frappe.db.get_value("Purchase Invoice", res["purchase_invoice"], "docstatus"), 1)
 		self.assertEqual(frappe.db.get_value("Payment Entry", res["payment_entry"], "docstatus"), 1)
-		self.assertEqual(frappe.db.get_value("Payment Entry", res["payment_entry"], "mode_of_payment"), "Cash")
+		self.assertEqual(
+			frappe.db.get_value("Payment Entry", res["payment_entry"], "mode_of_payment"), "Cash"
+		)
 		pi_grand_total = frappe.db.get_value("Purchase Invoice", res["purchase_invoice"], "grand_total")
-		self.assertEqual(frappe.db.get_value("Payment Entry", res["payment_entry"], "paid_amount"), pi_grand_total)
+		self.assertEqual(
+			frappe.db.get_value("Payment Entry", res["payment_entry"], "paid_amount"), pi_grand_total
+		)
 
 	def test_cancel_reverses_chain(self):
 		res = create_full_purchase(

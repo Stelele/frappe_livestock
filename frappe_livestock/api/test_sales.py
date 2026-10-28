@@ -158,9 +158,7 @@ class TestSaleAllocation(IntegrationTestCase):
 		else:
 			# "All Customer Groups" / "All Territories" are group nodes and are
 			# rejected on Customer; pick leaf nodes (guarded, site-seeded).
-			customer_group = (
-				frappe.db.get_value("Customer Group", {"is_group": 0}, "name") or "Individual"
-			)
+			customer_group = frappe.db.get_value("Customer Group", {"is_group": 0}, "name") or "Individual"
 			territory = frappe.db.get_value("Territory", {"is_group": 0}, "name") or "Zimbabwe"
 			customer = (
 				frappe.get_doc(
