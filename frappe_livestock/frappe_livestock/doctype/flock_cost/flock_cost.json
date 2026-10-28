@@ -13,8 +13,9 @@
  "fields": [
   {
    "fieldname": "purchase_invoice",
-   "fieldtype": "Data",
+   "fieldtype": "Link",
    "label": "Purchase Invoice",
+   "options": "Purchase Invoice",
    "reqd": 1,
    "unique": 1
   },

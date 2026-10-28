@@ -33,10 +33,8 @@ class _AllocationFixture(IntegrationTestCase):
 		self._clear_fixed()
 
 	def _clear_fixed(self):
-		# Fixed-name fixtures collide across runs whenever a committing test
+		# Fixed-name flocks collide across runs whenever a committing test
 		# (create_full_purchase commits) persists them; clear for re-runnability.
-		if frappe.db.exists("Flock Cost", "PI-FAKE"):
-			frappe.delete_doc("Flock Cost", "PI-FAKE", force=True)
 		for date in self.FIXED_FLOCK_DATES:
 			name = f"Broiler {date}"
 			for parent in frappe.get_all("Flock Cost Item", {"flock": name}, pluck="parent"):
@@ -57,16 +55,41 @@ class _AllocationFixture(IntegrationTestCase):
 			}
 		).insert()
 
+	def _real_pi(self, qty=20, rate=10):
+		# Idempotent guards in Task 6 style: distinctive supplier/item reused if present.
+		company = frappe.defaults.get_user_default("company")
+		if frappe.db.exists("Supplier", "FeedCo"):
+			supplier = "FeedCo"
+		else:
+			supplier = (
+				frappe.get_doc(
+					{
+						"doctype": "Supplier",
+						"supplier_name": "FeedCo",
+						"supplier_group": "All Supplier Groups",
+					}
+				)
+				.insert()
+				.name
+			)
+		warehouse = frappe.db.get_value("Warehouse", {"company": company, "is_group": 0}, "name")
+		return create_full_purchase(
+			company, supplier, warehouse, [{"item_code": "Feed", "qty": qty, "rate": rate}]
+		)["purchase_invoice"]
+
 
 class TestAllocationSplit(_AllocationFixture):
+	def setUp(self):
+		super().setUp()
+		self.pi = self._real_pi()
+
 	def test_split_across_two_flocks_and_cost(self):
 		a = self._flock("2026-10-28")
 		b = self._flock("2026-11-14")
-		# cost doc referencing a purchase invoice is hand-built to avoid needing a real PI
 		cost = frappe.get_doc(  # noqa: F841 -- kept verbatim per task brief
 			{
 				"doctype": "Flock Cost",
-				"purchase_invoice": "PI-FAKE",
+				"purchase_invoice": self.pi,
 				"items": [
 					{"item_code": "Feed", "qty": 8, "amount": 80, "flock": a.name},
 					{"item_code": "Feed", "qty": 12, "amount": 120, "flock": b.name},
@@ -78,13 +101,17 @@ class TestAllocationSplit(_AllocationFixture):
 
 
 class TestAllocationZeroBirds(_AllocationFixture):
+	def setUp(self):
+		super().setUp()
+		self.pi = self._real_pi()
+
 	def test_cost_per_bird_zero_when_all_dead(self):
 		a = self._flock("2026-10-28")
 		frappe.get_doc({"doctype": "Mortality", "flock": a.name, "qty": 500}).insert()
 		frappe.get_doc(
 			{
 				"doctype": "Flock Cost",
-				"purchase_invoice": "PI-FAKE",
+				"purchase_invoice": self.pi,
 				"items": [{"item_code": "Feed", "qty": 8, "amount": 80, "flock": a.name}],
 			}
 		).insert()
@@ -92,10 +119,14 @@ class TestAllocationZeroBirds(_AllocationFixture):
 
 
 class TestAllocationDuplicate(_AllocationFixture):
+	def setUp(self):
+		super().setUp()
+		self.pi = self._real_pi()
+
 	def test_duplicate_purchase_invoice_is_rejected(self):
 		base = {
 			"doctype": "Flock Cost",
-			"purchase_invoice": "PI-FAKE",
+			"purchase_invoice": self.pi,
 			"items": [{"item_code": "Feed", "qty": 8, "amount": 80, "flock": self._flock("2026-10-28").name}],
 		}
 		frappe.get_doc(base).insert()
