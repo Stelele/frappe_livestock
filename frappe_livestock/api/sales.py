@@ -18,6 +18,8 @@ def allocate_sales_to_ready_flocks_for_type(flock_type, qty):
 		filters={"livestock_type": flock_type, "status": "Ready"},
 		fields=["name"],
 		order_by="start_date asc",
+		ignore_permissions=True,  # R16: hook runs as the submitting user (e.g. Sales User),
+		# who has no Flock read permission; allocation must still see Ready flocks.
 	)
 
 	allocated = 0
@@ -25,13 +27,20 @@ def allocate_sales_to_ready_flocks_for_type(flock_type, qty):
 	for row in rows:
 		if remaining <= 0:
 			break
-		flock = frappe.get_doc("Flock", row["name"])
+		flock = frappe.get_doc("Flock", row["name"])  # read-only: ceiling only
 		ceiling = flock.surviving_birds() - int(flock.birds_sold or 0)
 		if ceiling <= 0:
 			continue
 		take = min(remaining, ceiling)
-		flock.birds_sold = int(flock.birds_sold or 0) + take
-		flock.save()
+		# R16: elevated counter write — bypasses the doc write-permission gate
+		# so a non-admin submitter never blocks; touches only `birds_sold`.
+		frappe.db.set_value(
+			"Flock",
+			row["name"],
+			"birds_sold",
+			int(flock.birds_sold or 0) + take,
+			update_modified=False,
+		)
 		allocated += take
 		remaining -= take
 
@@ -72,20 +81,13 @@ def allocate_sales_to_ready_flocks(doc=None, method=None):
 
 	Called positionally as `allocate_sales_to_ready_flocks(doc, method)` by the
 	`doc_events` hook. When `doc` is a Sales Invoice document (or name), only
-	that invoice's lines are processed; when `doc` is None, recent submitted
-	Sales Invoices are processed. Returns `{"allocated", "unallocated"}`.
+	that invoice's lines are processed. A `None` doc is an explicit no-op
+	(phase-2 park: a no-arg sweep would need an allocation ledger to stay
+	idempotent; the on_submit hook is the auto path).
+	Returns `{"allocated", "unallocated"}`.
 	"""
 	if doc is None:
-		names = frappe.db.get_list(
-			"Sales Invoice", filters={"docstatus": 1}, pluck="name", order_by="modified desc", limit=100
-		)
-		allocated = 0
-		unallocated = 0
-		for name in names:
-			result = _allocate_invoice_items(frappe.get_doc("Sales Invoice", name).items)
-			allocated += result["allocated"]
-			unallocated += result["unallocated"]
-		return {"allocated": allocated, "unallocated": unallocated}
+		return {"allocated": 0, "unallocated": 0}
 
 	if isinstance(doc, str):
 		doc = frappe.get_doc("Sales Invoice", doc)

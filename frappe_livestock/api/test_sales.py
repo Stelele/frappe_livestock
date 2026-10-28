@@ -1,7 +1,10 @@
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from frappe_livestock.api.sales import allocate_sales_to_ready_flocks_for_type
+from frappe_livestock.api.sales import (
+	allocate_sales_to_ready_flocks,
+	allocate_sales_to_ready_flocks_for_type,
+)
 from frappe_livestock.frappe_livestock.doctype.livestock_type.test_livestock_type import (
 	ensure_broiler_type,
 )
@@ -64,3 +67,40 @@ class TestSaleAllocation(IntegrationTestCase):
 		self.assertEqual(result, {"allocated": 300, "unallocated": 0})
 		self.assertEqual(older.status, "Ready")
 		self.assertEqual(newer.status, "Ready")
+
+	def test_non_admin_allocation_increments_birds_sold_only(self):
+		# R16: a submitting Sales User has no Flock permission; allocation must
+		# still work and must touch nothing besides `birds_sold`.
+		email = "sales-alloc@example.com"
+		if not frappe.db.exists("User", email):
+			frappe.get_doc({"doctype": "User", "email": email, "first_name": "Sales Alloc"}).insert()
+		flock = self._ready_flock("2026-10-28", placed=500)
+		before = {
+			"status": flock.status,
+			"livestock_type": flock.livestock_type,
+			"quantity_placed": flock.quantity_placed,
+			"start_date": str(flock.start_date),
+		}
+		frappe.set_user(email)
+		try:
+			result = allocate_sales_to_ready_flocks_for_type(flock_type="Broiler", qty=100)
+		finally:
+			frappe.set_user("Administrator")
+		flock.reload()
+		self.assertEqual(result, {"allocated": 100, "unallocated": 0})
+		self.assertEqual(flock.birds_sold, 100)
+		# Elevated write must touch nothing besides `birds_sold`.
+		self.assertEqual(
+			before,
+			{
+				"status": flock.status,
+				"livestock_type": flock.livestock_type,
+				"quantity_placed": flock.quantity_placed,
+				"start_date": str(flock.start_date),
+			},
+		)
+
+	def test_no_arg_call_is_explicit_noop(self):
+		# R15: without a doc there is no allocation ledger, so a sweep would
+		# double-count; the no-arg call must be a no-op.
+		self.assertEqual(allocate_sales_to_ready_flocks(), {"allocated": 0, "unallocated": 0})
