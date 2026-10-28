@@ -53,3 +53,29 @@ class TestFlock(IntegrationTestCase):
 			}
 		).insert()
 		self.assertEqual(doc.expected_ready_date().isoformat(), "2026-12-15")  # 48 days later
+
+
+class TestFlockMortality(IntegrationTestCase):
+	def setUp(self):
+		super().setUp()
+		ensure_broiler_type()
+		if frappe.db.exists("Flock", f"Broiler {today()}"):
+			frappe.delete_doc("Flock", f"Broiler {today()}", force=True)
+
+	def test_mortality_reduces_surviving_and_remaining(self):
+		flock = frappe.get_doc(
+			{
+				"doctype": "Flock",
+				"livestock_type": "Broiler",
+				"start_date": today(),
+				"quantity_placed": 500,
+			}
+		).insert()
+		frappe.get_doc({"doctype": "Mortality", "flock": flock.name, "qty": 12}).insert()
+		self.assertEqual(flock.mortalities_total(), 12)
+		self.assertEqual(flock.surviving_birds(), 488)
+		self.assertEqual(flock.remaining_birds(), 488)
+
+	def test_mortality_qty_must_be_positive(self):
+		with self.assertRaises(frappe.exceptions.ValidationError):
+			frappe.get_doc({"doctype": "Mortality", "flock": "x", "qty": 0}).insert()

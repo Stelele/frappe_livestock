@@ -23,3 +23,14 @@ class Flock(Document):
 			return None
 		last_day = max(stage.end_day if hasattr(stage, "end_day") else stage["end_day"] for stage in stages)
 		return add_days(getdate(self.start_date), last_day)
+
+	def mortalities_total(self) -> int:
+		return int(
+			frappe.db.sql("select sum(qty) from `tabMortality` where flock = %s", self.name)[0][0] or 0
+		)
+
+	def surviving_birds(self) -> int:
+		return int(self.quantity_placed or 0) - self.mortalities_total()
+
+	def remaining_birds(self) -> int:
+		return self.surviving_birds() - int(self.birds_sold or 0)
