@@ -1,0 +1,82 @@
+{
+ "actions": [],
+ "allow_rename": 1,
+ "creation": "2026-10-28 00:00:00.000000",
+ "doctype": "DocType",
+ "engine": "InnoDB",
+ "field_order": [
+  "livestock_type",
+  "start_date",
+  "quantity_placed",
+  "housing",
+  "status",
+  "birds_sold"
+ ],
+ "fields": [
+  {
+   "fieldname": "livestock_type",
+   "fieldtype": "Link",
+   "label": "Livestock Type",
+   "options": "Livestock Type",
+   "reqd": 1
+  },
+  {
+   "fieldname": "start_date",
+   "fieldtype": "Date",
+   "label": "Start Date",
+   "reqd": 1
+  },
+  {
+   "fieldname": "quantity_placed",
+   "fieldtype": "Int",
+   "label": "Quantity Placed",
+   "reqd": 1
+  },
+  {
+   "fieldname": "housing",
+   "fieldtype": "Link",
+   "label": "Housing",
+   "options": "Housing"
+  },
+  {
+   "fieldname": "status",
+   "fieldtype": "Select",
+   "label": "Status",
+   "options": "Draft\nActive\nReady\nClosed",
+   "default": "Active"
+  },
+  {
+   "fieldname": "birds_sold",
+   "fieldtype": "Int",
+   "label": "Birds Sold",
+   "default": "0"
+  }
+ ],
+ "index_web_pages_for_search": 1,
+ "istable": 0,
+ "links": [],
+ "modified": "2026-10-28 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Frappe Livestock",
+ "name": "Flock",
+ "naming_rule": "By script",
+ "owner": "Administrator",
+ "permissions": [
+  {
+   "create": 1,
+   "delete": 1,
+   "email": 1,
+   "export": 1,
+   "print": 1,
+   "read": 1,
+   "report": 1,
+   "role": "System Manager",
+   "share": 1,
+   "write": 1
+  }
+ ],
+ "sort_field": "start_date",
+ "sort_order": "DESC",
+ "states": [],
+ "track_changes": 0
+}
