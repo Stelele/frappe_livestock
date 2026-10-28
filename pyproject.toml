@@ -3,7 +3,7 @@ name = "frappe_livestock"
 authors = [
     { name = "Gift Mugweni", email = "giftmugweni@gmail.com"}
 ]
-description = "A simple module for managing livestocks and projects batches"
+description = "A simple module to make managing livestock easier"
 requires-python = ">=3.14"
 readme = "README.md"
 dynamic = ["version"]

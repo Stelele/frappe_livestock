@@ -1,7 +1,7 @@
 app_name = "frappe_livestock"
 app_title = "Frappe Livestock"
 app_publisher = "Gift Mugweni"
-app_description = "A simple module for managing livestocks and projects batches"
+app_description = "A simple module to make managing livestock easier"
 app_email = "giftmugweni@gmail.com"
 app_license = "mit"
 

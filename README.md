@@ -1,6 +1,6 @@
 ### Frappe Livestock
 
-A simple module for managing livestocks and projects batches
+A simple module to make managing livestock easier
 
 ### Installation
 
