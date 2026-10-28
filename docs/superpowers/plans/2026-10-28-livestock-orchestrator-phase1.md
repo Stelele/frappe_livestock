@@ -205,7 +205,7 @@ class TestFlock(IntegrationTestCase):
             "doctype": "Flock", "livestock_type": "Broiler",
             "start_date": "2026-10-28", "quantity_placed": 500,
         }).insert()
-        self.assertEqual(doc.expected_ready_date().isoformat(), "2026-12-14")  # 48 days later
+        self.assertEqual(doc.expected_ready_date().isoformat(), "2026-12-15")  # 48 days later
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
