@@ -498,7 +498,8 @@ git commit -m "feat: Flock Cost allocation and cost-per-bird computation"
 
 **Interfaces:**
 - Consumes: `Flock` (Task 3), `Livestock Type.finished_item` (Task 1).
-- Produces: `frappe_livestock.api.sales.allocate_sales_to_ready_flocks(sales_invoice=None) -> dict`. For each line of the invoice whose `item_code` equals a `Livestock Type.finished_item`, sum the qty per type; allocate that qty to flocks of that type with `status == "Ready"`, oldest `start_date` first, incrementing `birds_sold` — never past `surviving_birds` (clamp; return the unallocated shortfall in the result). Hook: `"Sales Invoice": {"on_submit": "frappe_livestock.api.sales.allocate_sales_to_ready_flocks"}`.
+- Produces: `frappe_livestock.api.sales.allocate_sales_to_ready_flocks(doc=None, method=None) -> dict` (hook signature — Frappe calls it positionally on Sales Invoice submit with `(doc, method)`. Amended by ruling R15: when `doc` is None this is an explicit no-op returning `{"allocated": 0, "unallocated": 0}` — there is intentionally NO "all unallocated submitted invoices" sweep; that idea needs an allocation ledger and is parked for phase 2). When `doc` is a Sales Invoice (document or name), for each line whose `item_code` equals a `Livestock Type.finished_item`, sum the qty per type; allocate that qty to flocks of that type with `status == "Ready"`, oldest `start_date` first, incrementing `birds_sold` — never past `surviving_birds - birds_sold` (clamp at ceiling; a ≤0 ceiling allocates 0; return the unallocated shortfall in the result). Allocation-path flock reads/writes are permission-elevated (R16: `ignore_permissions` reads, `frappe.db.set_value` for the counter, `update_modified=False`) so a non-admin shop user's submit works. Hook: `"Sales Invoice": {"on_submit": "frappe_livestock.api.sales.allocate_sales_to_ready_flocks"}`.
+- Produces internal test seam: `allocate_sales_to_ready_flocks_for_type(flock_type, qty)` performing the same FIFO/clamp for one type, returning `{"allocated", "unallocated"}`.
 
 - [ ] **Step 1: Write the failing test** (`test_sales.py`)
 
@@ -538,7 +539,7 @@ Expected: FAIL
 
 - [ ] **Step 3: Implement `api/sales.py` + hook**
 
-Expose an internal `allocate_sales_to_ready_flocks_for_type(flock_type, qty)` (the test seam) that does the FIFO-by-`start_date`, clamp-at-`surviving_birds` allocation, returning `{"allocated", "unallocated"}`. `allocate_sales_to_ready_flocks(sales_invoice=None)` reads a Sales Invoice (or all unallocated submitted invoices), maps `finished_item` → type, and calls the seam per type. Add the `doc_events` hook.
+Expose an internal `allocate_sales_to_ready_flocks_for_type(flock_type, qty)` (the test seam) that does the FIFO-by-`start_date`, clamp-at-`surviving_birds` allocation, returning `{"allocated", "unallocated"}`. `allocate_sales_to_ready_flocks(doc=None, method=None)` gets the hook calling convention and NO-OPs when `doc is None` (R15 — no sweep). Add the `doc_events` hook.
 
 - [ ] **Step 4: Run test to verify it passes**
 
