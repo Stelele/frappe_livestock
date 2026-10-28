@@ -28,6 +28,13 @@ Pre-commit is configured to use the following tools for checking and formatting 
 - prettier
 - pyupgrade
 
+### Permissions & setup
+
+- Custom doctypes (Flock, Livestock Type, Mortality, Flock Cost, Feed Event) are System-Manager-only by design.
+- Sale allocation works for any user who can submit a Sales Invoice (permission-free flock counters by design).
+- The flock-dashboard page ships System-Manager-only.
+- `finished_item` must be set on the Livestock Type before sale allocation activates.
+
 ### License
 
 mit

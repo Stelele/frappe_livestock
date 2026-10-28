@@ -104,3 +104,87 @@ class TestSaleAllocation(IntegrationTestCase):
 		# R15: without a doc there is no allocation ledger, so a sweep would
 		# double-count; the no-arg call must be a no-op.
 		self.assertEqual(allocate_sales_to_ready_flocks(), {"allocated": 0, "unallocated": 0})
+
+	def test_submit_hook_allocates_finished_item_to_ready_flock(self):
+		# End-to-end: Sales Invoice on_submit hook -> FIFO allocation.
+		# Uses a dedicated Livestock Type + item so the shared Broiler is untouched.
+		if frappe.db.exists("Item", "Hook Bird"):
+			item = "Hook Bird"
+		else:
+			item = (
+				frappe.get_doc(
+					{
+						"doctype": "Item",
+						"item_code": "Hook Bird",
+						"item_group": "Products",
+						"stock_uom": "Nos",
+						"is_stock_item": 0,
+						"is_sales_item": 1,
+					}
+				)
+				.insert()
+				.name
+			)
+		if frappe.db.exists("Livestock Type", "Broiler Hook Test"):
+			frappe.db.set_value("Livestock Type", "Broiler Hook Test", "finished_item", item)
+		else:
+			frappe.get_doc(
+				{
+					"doctype": "Livestock Type",
+					"livestock_type_name": "Broiler Hook Test",
+					"finished_item": item,
+					"stages": [
+						{"stage_name": "Day Old Chick", "start_day": 0, "end_day": 20},
+						{"stage_name": "Grower", "start_day": 21, "end_day": 41},
+						{"stage_name": "Broiler", "start_day": 42, "end_day": 48},
+					],
+				}
+			).insert(ignore_if_duplicate=True)
+		flock_name = "Broiler Hook Test 2026-10-28"
+		if frappe.db.exists("Flock", flock_name):
+			frappe.delete_doc("Flock", flock_name, force=True)
+		flock = frappe.get_doc(
+			{
+				"doctype": "Flock",
+				"livestock_type": "Broiler Hook Test",
+				"start_date": "2026-10-28",
+				"quantity_placed": 500,
+				"status": "Ready",
+				"birds_sold": 0,
+			}
+		).insert()
+		if frappe.db.exists("Customer", "Hook Customer"):
+			customer = "Hook Customer"
+		else:
+			# "All Customer Groups" / "All Territories" are group nodes and are
+			# rejected on Customer; pick leaf nodes (guarded, site-seeded).
+			customer_group = (
+				frappe.db.get_value("Customer Group", {"is_group": 0}, "name") or "Individual"
+			)
+			territory = frappe.db.get_value("Territory", {"is_group": 0}, "name") or "Zimbabwe"
+			customer = (
+				frappe.get_doc(
+					{
+						"doctype": "Customer",
+						"customer_name": "Hook Customer",
+						"customer_group": customer_group,
+						"territory": territory,
+					}
+				)
+				.insert()
+				.name
+			)
+		company = frappe.defaults.get_user_default("company")
+		si = frappe.get_doc(
+			{
+				"doctype": "Sales Invoice",
+				"company": company,
+				"customer": customer,
+				"items": [{"item_code": item, "qty": 3, "rate": 10}],
+			}
+		)
+		si.insert()
+		si.submit()
+		flock.reload()
+		self.assertEqual(flock.birds_sold, 3)
+		self.assertEqual(flock.status, "Ready")
