@@ -79,3 +79,15 @@ class TestFlockMortality(IntegrationTestCase):
 	def test_mortality_qty_must_be_positive(self):
 		with self.assertRaises(frappe.exceptions.ValidationError):
 			frappe.get_doc({"doctype": "Mortality", "flock": "x", "qty": 0}).insert()
+
+	def test_mortality_qty_zero_against_real_flock(self):
+		flock = frappe.get_doc(
+			{
+				"doctype": "Flock",
+				"livestock_type": "Broiler",
+				"start_date": today(),
+				"quantity_placed": 500,
+			}
+		).insert()
+		with self.assertRaisesRegex(frappe.exceptions.ValidationError, "at least 1"):
+			frappe.get_doc({"doctype": "Mortality", "flock": flock.name, "qty": 0}).insert()
