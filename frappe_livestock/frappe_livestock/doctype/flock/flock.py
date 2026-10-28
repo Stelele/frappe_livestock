@@ -34,3 +34,15 @@ class Flock(Document):
 
 	def remaining_birds(self) -> int:
 		return self.surviving_birds() - int(self.birds_sold or 0)
+
+	def total_cost(self) -> float:
+		return float(
+			frappe.db.sql("select sum(amount) from `tabFlock Cost Item` where flock = %s", self.name)[0][0]
+			or 0
+		)
+
+	def cost_per_bird(self) -> float:
+		surviving = self.surviving_birds()
+		if surviving == 0:
+			return 0.0
+		return self.total_cost() / surviving
