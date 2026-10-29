@@ -40,7 +40,7 @@ app_license = "mit"
 # webform_include_css = {"doctype": "public/css/doctype.css"}
 
 # include js in page
-page_js = {"flock-dashboard": "public/js/flock_dashboard.js"}
+page_js = {"flock-dashboard": "public/js/flock_dashboard.js", "purchase-entry": "public/js/purchase_entry.js"}
 
 # include js in doctype views
 doctype_js = {

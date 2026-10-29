@@ -2,6 +2,10 @@
 // hook (see hooks.py). Page scripts and `page_js` files are concatenated into
 // one page script with the hook file appended last, so this definition is the
 // on_page_load handler that sticks; the page-folder file stays a minimal shell.
+//
+// The flock picker is a body-mounted FieldGroup (NOT page.add_field): in v16
+// the page-form area add_field targets is not rendered on this layout, which
+// left the dashboard with no visible selector.
 frappe.pages["flock-dashboard"].on_page_load = function (wrapper) {
 	var page = frappe.ui.make_app_page({
 		parent: wrapper,
@@ -9,19 +13,30 @@ frappe.pages["flock-dashboard"].on_page_load = function (wrapper) {
 		single_column: true,
 	});
 
-	var flock_field = page.add_field({
-		fieldname: "flock",
-		label: __("Flock"),
-		fieldtype: "Link",
-		options: "Flock",
-		change() {
-			render_summary(flock_field.get_value());
-		},
+	var $picker = $('<div class="flock-picker"></div>').appendTo(page.body);
+	var $summary = $('<div class="flock-summary"></div>').appendTo(page.body);
+
+	var picker = new frappe.ui.FieldGroup({
+		parent: $picker.get(0),
+		fields: [
+			{
+				fieldname: "flock",
+				label: __("Flock"),
+				fieldtype: "Link",
+				options: "Flock",
+				onchange: function () {
+					render_summary(picker.get_value("flock"));
+				},
+			},
+		],
 	});
+	picker.make();
+	// expose for tests / programmatic use
+	wrapper.page.flock_picker = picker;
 
 	function render_summary(name) {
 		if (!name) {
-			page.body.html("");
+			$summary.empty();
 			return;
 		}
 		frappe.call("frappe_livestock.api.flock.get_flock_summary", { flock: name }).then((r) => {
@@ -41,9 +56,14 @@ frappe.pages["flock-dashboard"].on_page_load = function (wrapper) {
 				[__("Cost per Bird"), s.cost_per_bird],
 				[__("Status"), s.status],
 			]
-				.map((row) => `<tr><td>${row[0]}</td><td>${row[1] == null ? "" : row[1]}</td></tr>`)
+				.map(
+					(row) =>
+						`<tr><td>${frappe.utils.escape_html(row[0] || "")}</td><td>${frappe.utils.escape_html(
+							String(row[1] == null ? "" : row[1])
+						)}</td></tr>`
+				)
 				.join("");
-			page.body.html(`<table class="table table-bordered"><tbody>${rows}</tbody></table>`);
+			$summary.html(`<table class="table table-bordered"><tbody>${rows}</tbody></table>`);
 		});
 	}
 
@@ -54,6 +74,6 @@ frappe.pages["flock-dashboard"].on_page_load = function (wrapper) {
 		if (!flocks.length) {
 			return;
 		}
-		flock_field.set_value(flocks[0].name);
+		picker.set_value("flock", flocks[0].name);
 	});
 };
