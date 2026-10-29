@@ -228,20 +228,19 @@ def _update_item_prices(items):
 
 
 @frappe.whitelist()
-def create_full_purchase(
-	company, supplier, warehouse, items, invoice_number=None, invoice_date=None, mode_of_payment="Cash"
-):
+def create_full_purchase(company, supplier, warehouse, items, invoice_number=None, invoice_date=None, mode_of_payment="Cash"):
 	"""Create full purchase cycle: Purchase Order → Purchase Receipt → Purchase Invoice → Payment Entry.
 
 	args:
 	        company: Company name
 	        supplier: Supplier name
 	        warehouse: Receiving warehouse
-	        items: List of {item_code, qty, rate} dicts
+	        items: List of {item_code, qty, rate} dicts (JSON-encoded when called over HTTP)
 	        invoice_number: (optional) Supplier's invoice number
 	        invoice_date: (optional) Invoice date (YYYY-MM-DD), defaults to today
 	        mode_of_payment: (optional) Mode of Payment, defaults to "Cash". Payment is always in full.
 	"""
+	items = frappe.parse_json(items) or []
 	if not invoice_date:
 		invoice_date = frappe.utils.nowdate()
 
@@ -351,11 +350,12 @@ def amend_full_purchase(
 	        company: Company name
 	        supplier: Supplier name
 	        warehouse: Receiving warehouse
-	        items: List of {item_code, qty, rate} dicts
+	        items: List of {item_code, qty, rate} dicts (JSON-encoded when called over HTTP)
 	        invoice_number: (optional) Supplier's invoice number
 	        invoice_date: (optional) Invoice date (YYYY-MM-DD), defaults to today
 	        mode_of_payment: (optional) Mode of Payment, defaults to "Cash". Payment is always in full.
 	"""
+	items = frappe.parse_json(items) or []
 	if not purchase_invoice:
 		frappe.throw("purchase_invoice is required")
 	if not company:

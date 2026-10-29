@@ -20,6 +20,7 @@
 - Payment is always immediate and in full; only the mode of payment varies.
 - Simplicity over resilience: no queues, no retry machinery, no offline support.
 - Python indent is tabs (Ruff); run `pre-commit run --all-files` before each commit.
+- Whitelisted endpoints taking complex args (lists/dicts): frappe's HTTP layer JSON-stringifies them; decode inside with `frappe.parse_json(arg) or []`. Do NOT rely on pydantic annotations for this (`list` annotations reject the string; bare args fail isinstance checks). Direct-Python test calls pass real lists — `parse_json` passes them through untouched, so both callers work.
 - Explicit save over autosave; restraint in UI.
 
 ## Review Focus

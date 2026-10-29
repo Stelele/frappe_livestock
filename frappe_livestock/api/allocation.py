@@ -12,6 +12,8 @@ def _invoice_rates(purchase_invoice):
 
 @frappe.whitelist()
 def split_purchase_to_flocks(purchase_invoice, allocations):
+	"""Split a purchase's lines across flocks (JSON-encoded allocations over HTTP)."""
+	allocations = frappe.parse_json(allocations) or []
 	"""Split a bulk purchase invoice across flocks, deriving amount from PI line rates.
 
 	args:
