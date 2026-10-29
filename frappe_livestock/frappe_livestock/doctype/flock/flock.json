@@ -10,6 +10,7 @@
   "quantity_placed",
   "housing",
   "status",
+  "chick_purchase_invoice",
   "birds_sold"
  ],
  "fields": [
@@ -50,6 +51,12 @@
    "fieldtype": "Int",
    "label": "Birds Sold",
    "default": "0"
+  },
+  {
+   "fieldname": "chick_purchase_invoice",
+   "fieldtype": "Link",
+   "label": "Chick Purchase Invoice",
+   "options": "Purchase Invoice"
   }
  ],
  "index_web_pages_for_search": 1,

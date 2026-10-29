@@ -6,6 +6,11 @@ from frappe_livestock.frappe_livestock.doctype.livestock_type.test_livestock_typ
 	ensure_broiler_type,
 )
 
+# Flock's links (chick_purchase_invoice → Purchase Invoice; Livestock Type's item
+# links) pull ERPNext's test_purchase_invoice import-time bootstrap, which
+# duplicates "Standard Buying" on this site — these tests never need those records.
+IGNORE_TEST_RECORD_DEPENDENCIES = ["Item", "Purchase Invoice"]
+
 
 class TestFlock(IntegrationTestCase):
 	def setUp(self):

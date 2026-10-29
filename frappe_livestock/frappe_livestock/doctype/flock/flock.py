@@ -9,6 +9,23 @@ class Flock(Document):
 	def autoname(self):
 		self.name = f"{self.livestock_type} {self.start_date}"
 
+	def validate(self):
+		# capture the saved value before this write, so on_update can tell
+		# whether the chick purchase link actually changed
+		self._chick_pi_before = frappe.db.get_value(self.doctype, self.name, "chick_purchase_invoice")
+
+	def on_update(self):
+		# when the chick purchase link is set (and changed), allocate that
+		# invoice's chick lines here as the flock's initial cost — same ledger
+		# mechanism as feed, idempotent upsert
+		if (
+			self.chick_purchase_invoice
+			and self.chick_purchase_invoice != getattr(self, "_chick_pi_before", None)
+		):
+			from frappe_livestock.api.chicks import _allocate_to_flock
+
+			_allocate_to_flock(self.name, self.chick_purchase_invoice)
+
 	def age_days(self) -> int:
 		return max((getdate(today()) - getdate(self.start_date)).days, 0)
 

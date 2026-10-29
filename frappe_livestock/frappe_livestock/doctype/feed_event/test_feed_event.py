@@ -6,6 +6,9 @@ from frappe_livestock.frappe_livestock.doctype.livestock_type.test_livestock_typ
 	ensure_broiler_type,
 )
 
+# see test_flock.py: the Item/Purchase Invoice link walk trips ERPNext's bootstrap
+IGNORE_TEST_RECORD_DEPENDENCIES = ["Item", "Purchase Invoice"]
+
 FEED_ITEM_CODE = "Early Lay Feed"
 
 # The `feed_item` Link pulls Item (and its whole ERPNext fixture chain,

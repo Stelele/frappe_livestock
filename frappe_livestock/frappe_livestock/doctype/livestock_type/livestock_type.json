@@ -7,6 +7,7 @@
  "engine": "InnoDB",
  "field_order": [
   "livestock_type_name",
+  "chick_item",
   "finished_item",
   "stages"
  ],
@@ -17,6 +18,12 @@
    "label": "Livestock Type Name",
    "reqd": 1,
    "unique": 1
+  },
+  {
+   "fieldname": "chick_item",
+   "fieldtype": "Link",
+   "label": "Chick Item (day-old stock)",
+   "options": "Item"
   },
   {
    "fieldname": "finished_item",

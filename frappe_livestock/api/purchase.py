@@ -246,23 +246,20 @@ def create_full_purchase(company, supplier, warehouse, items, invoice_number=Non
 
 	_validate_purchase_inputs(company, supplier, warehouse, items, invoice_number)
 
-	try:
-		po = _create_purchase_order(company, supplier, warehouse, items, invoice_date)
-		pr = _create_purchase_receipt(po, invoice_date)
-		pi = _create_purchase_invoice(pr, invoice_number, invoice_date)
-		pe = _create_payment_entry(pi, invoice_date, company, mode_of_payment)
+	# no explicit commit: frappe's request lifecycle commits on success and
+	# rolls back on failure, keeping the chain atomic without breaking test
+	# isolation (a mid-API commit would persist any pending caller transaction)
+	po = _create_purchase_order(company, supplier, warehouse, items, invoice_date)
+	pr = _create_purchase_receipt(po, invoice_date)
+	pi = _create_purchase_invoice(pr, invoice_number, invoice_date)
+	pe = _create_payment_entry(pi, invoice_date, company, mode_of_payment)
 
-		for doc, doctype in [
-			(pr, "Purchase Receipt"),
-			(pi, "Purchase Invoice"),
-			(pe, "Payment Entry"),
-		]:
-			frappe.db.set_value(doctype, doc.name, "posting_date", invoice_date)
-
-		frappe.db.commit()
-	except Exception:
-		frappe.db.rollback()
-		raise
+	for doc, doctype in [
+		(pr, "Purchase Receipt"),
+		(pi, "Purchase Invoice"),
+		(pe, "Payment Entry"),
+	]:
+		frappe.db.set_value(doctype, doc.name, "posting_date", invoice_date)
 
 	_update_item_prices(items)
 
@@ -323,8 +320,6 @@ def cancel_full_purchase(purchase_invoice):
 	po = frappe.get_doc("Purchase Order", po_name)
 	po.cancel()
 	cancelled.append(po_name)
-
-	frappe.db.commit()
 
 	return {
 		"cancelled": cancelled,
@@ -405,53 +400,47 @@ def amend_full_purchase(
 	if not invoice_date:
 		invoice_date = frappe.utils.nowdate()
 
-	try:
-		pr_name = frappe.db.get_value(
-			"Purchase Invoice Item", {"parent": purchase_invoice}, "purchase_receipt"
-		)
-		if not pr_name:
-			frappe.throw("Could not find linked Purchase Receipt")
+	pr_name = frappe.db.get_value(
+		"Purchase Invoice Item", {"parent": purchase_invoice}, "purchase_receipt"
+	)
+	if not pr_name:
+		frappe.throw("Could not find linked Purchase Receipt")
 
-		po_name = frappe.db.get_value("Purchase Receipt Item", {"parent": pr_name}, "purchase_order")
-		if not po_name:
-			frappe.throw("Could not find linked Purchase Order")
+	po_name = frappe.db.get_value("Purchase Receipt Item", {"parent": pr_name}, "purchase_order")
+	if not po_name:
+		frappe.throw("Could not find linked Purchase Order")
 
-		pe_name = frappe.db.get_value(
-			"Payment Entry Reference",
-			{"reference_doctype": "Purchase Invoice", "reference_name": purchase_invoice},
-			"parent",
-		)
+	pe_name = frappe.db.get_value(
+		"Payment Entry Reference",
+		{"reference_doctype": "Purchase Invoice", "reference_name": purchase_invoice},
+		"parent",
+	)
 
-		if pe_name:
-			pe = frappe.get_doc("Payment Entry", pe_name)
-			if pe.docstatus == 1:
-				pe.cancel()
+	if pe_name:
+		pe = frappe.get_doc("Payment Entry", pe_name)
+		if pe.docstatus == 1:
+			pe.cancel()
 
-		pi = frappe.get_doc("Purchase Invoice", purchase_invoice)
-		pi.cancel()
+	pi = frappe.get_doc("Purchase Invoice", purchase_invoice)
+	pi.cancel()
 
-		pr = frappe.get_doc("Purchase Receipt", pr_name)
-		pr.cancel()
+	pr = frappe.get_doc("Purchase Receipt", pr_name)
+	pr.cancel()
 
-		po = frappe.get_doc("Purchase Order", po_name)
-		po.cancel()
+	po = frappe.get_doc("Purchase Order", po_name)
+	po.cancel()
 
-		new_po = _create_purchase_order(company, supplier, warehouse, items, invoice_date)
-		new_pr = _create_purchase_receipt(new_po, invoice_date)
-		new_pi = _create_purchase_invoice(new_pr, invoice_number, invoice_date, purchase_invoice)
-		new_pe = _create_payment_entry(new_pi, invoice_date, company, mode_of_payment)
+	new_po = _create_purchase_order(company, supplier, warehouse, items, invoice_date)
+	new_pr = _create_purchase_receipt(new_po, invoice_date)
+	new_pi = _create_purchase_invoice(new_pr, invoice_number, invoice_date, purchase_invoice)
+	new_pe = _create_payment_entry(new_pi, invoice_date, company, mode_of_payment)
 
-		for doc, doctype in [
-			(new_pr, "Purchase Receipt"),
-			(new_pi, "Purchase Invoice"),
-			(new_pe, "Payment Entry"),
-		]:
-			frappe.db.set_value(doctype, doc.name, "posting_date", invoice_date)
-
-		frappe.db.commit()
-	except Exception:
-		frappe.db.rollback()
-		raise
+	for doc, doctype in [
+		(new_pr, "Purchase Receipt"),
+		(new_pi, "Purchase Invoice"),
+		(new_pe, "Payment Entry"),
+	]:
+		frappe.db.set_value(doctype, doc.name, "posting_date", invoice_date)
 
 	_update_item_prices(items)
 

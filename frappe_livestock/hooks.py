@@ -46,6 +46,7 @@ page_js = {"flock-dashboard": "public/js/flock_dashboard.js", "purchase-entry": 
 doctype_js = {
 	"Mortality": "public/js/mortality.js",
 	"Feed Event": "public/js/feed_event.js",
+	"Flock": "public/js/flock.js",
 }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
