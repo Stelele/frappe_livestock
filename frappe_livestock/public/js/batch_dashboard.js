@@ -49,11 +49,11 @@ frappe.pages["batch-dashboard"].on_page_load = function (wrapper) {
 				[__("Expected Ready Date"), s.expected_ready_date],
 				[__("Quantity Placed"), s.quantity_placed],
 				[__("Mortalities"), s.mortalities_total],
-				[__("Surviving Birds"), s.surviving],
-				[__("Remaining Birds"), s.remaining],
-				[__("Birds Sold"), s.sold],
+				[__("Surviving"), s.surviving],
+				[__("Remaining"), s.remaining],
+				[__("Sold"), s.sold],
 				[__("Total Cost"), s.total_cost],
-				[__("Cost per Bird"), s.cost_per_head],
+				[__("Cost per Head"), s.cost_per_head],
 				[__("Status"), s.status],
 			]
 				.map(
