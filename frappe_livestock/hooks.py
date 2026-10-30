@@ -90,7 +90,8 @@ doctype_js = {
 # ------------
 
 # before_install = "frappe_livestock.install.before_install"
-# after_install = "frappe_livestock.install.after_install"
+after_install = "frappe_livestock.installer.after_install"
+after_migrate = "frappe_livestock.installer.after_migrate"
 
 # Uninstallation
 # ------------
@@ -145,6 +146,7 @@ doctype_js = {
 doc_events = {
 	"Sales Invoice": {
 		"on_submit": "frappe_livestock.api.sales.allocate_sales_to_ready_flocks",
+		"on_cancel": "frappe_livestock.api.sales.revoke_sale_allocation",
 	},
 }
 
