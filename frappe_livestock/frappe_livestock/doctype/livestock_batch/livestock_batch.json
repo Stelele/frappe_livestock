@@ -10,8 +10,8 @@
   "quantity_placed",
   "housing",
   "status",
-  "chick_purchase_invoice",
-  "birds_sold"
+  "stocking_purchase_invoice",
+  "sold"
  ],
  "fields": [
   {
@@ -47,15 +47,15 @@
    "default": "Active"
   },
   {
-   "fieldname": "birds_sold",
+   "fieldname": "sold",
    "fieldtype": "Int",
-   "label": "Birds Sold",
+   "label": "Sold",
    "default": "0"
   },
   {
-   "fieldname": "chick_purchase_invoice",
+   "fieldname": "stocking_purchase_invoice",
    "fieldtype": "Link",
-   "label": "Chick Purchase Invoice",
+   "label": "Stocking Purchase Invoice",
    "options": "Purchase Invoice"
   }
  ],
@@ -65,7 +65,7 @@
  "modified": "2026-10-28 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Frappe Livestock",
- "name": "Flock",
+ "name": "Livestock Batch",
  "naming_rule": "By script",
  "owner": "Administrator",
  "permissions": [

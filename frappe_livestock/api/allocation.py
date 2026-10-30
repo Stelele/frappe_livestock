@@ -11,14 +11,14 @@ def _invoice_rates(purchase_invoice):
 
 
 @frappe.whitelist()
-def split_purchase_to_flocks(purchase_invoice, allocations):
-	"""Split a purchase's lines across flocks (JSON-encoded allocations over HTTP)."""
+def split_purchase_to_batches(purchase_invoice, allocations):
+	"""Split a purchase's lines across batches (JSON-encoded allocations over HTTP)."""
 	allocations = frappe.parse_json(allocations) or []
-	"""Split a bulk purchase invoice across flocks, deriving amount from PI line rates.
+	"""Split a bulk purchase invoice across batches, deriving amount from PI line rates.
 
 	args:
 	        purchase_invoice: Name of the source Purchase Invoice
-	        allocations: List of {item_code, qty, flock} dicts
+	        allocations: List of {item_code, qty, batch} dicts
 	"""
 	if not purchase_invoice:
 		frappe.throw("purchase_invoice is required")
@@ -30,25 +30,25 @@ def split_purchase_to_flocks(purchase_invoice, allocations):
 	for allocation in allocations:
 		item_code = allocation.get("item_code")
 		qty = float(allocation.get("qty") or 0)
-		flock = allocation.get("flock")
+		batch = allocation.get("batch")
 		if item_code not in rates:
 			frappe.throw(f"Item '{item_code}' is not on Purchase Invoice '{purchase_invoice}'")
 		if qty <= 0:
 			frappe.throw(f"qty must be greater than 0 for item '{item_code}'")
-		if not flock or not frappe.db.exists("Flock", flock):
-			frappe.throw(f"Flock '{flock}' does not exist")
+		if not batch or not frappe.db.exists("Livestock Batch", batch):
+			frappe.throw(f"Livestock Batch '{batch}' does not exist")
 		rows.append(
 			{
 				"item_code": item_code,
 				"qty": qty,
 				"amount": rates[item_code] * qty,
-				"flock": flock,
+				"batch": batch,
 			}
 		)
 
-	existing = frappe.db.exists("Flock Cost", {"purchase_invoice": purchase_invoice})
+	existing = frappe.db.exists("Batch Cost", {"purchase_invoice": purchase_invoice})
 	if existing:
-		doc = frappe.get_doc("Flock Cost", existing)
+		doc = frappe.get_doc("Batch Cost", existing)
 		doc.set("items", [])
 		for row in rows:
 			doc.append("items", row)
@@ -56,27 +56,27 @@ def split_purchase_to_flocks(purchase_invoice, allocations):
 	else:
 		doc = frappe.get_doc(
 			{
-				"doctype": "Flock Cost",
+				"doctype": "Batch Cost",
 				"purchase_invoice": purchase_invoice,
 				"items": rows,
 			}
 		).insert()
 
-	return {"flock_cost": doc.name, "items": len(doc.items)}
+	return {"batch_cost": doc.name, "items": len(doc.items)}
 
 
 @frappe.whitelist()
-def get_active_flocks():
-	"""Return non-closed flocks newest first as {name, start_date, remaining_birds} dicts."""
+def get_active_batches():
+	"""Return non-closed batches newest first as {name, start_date, remaining} dicts."""
 	names = frappe.db.sql(
-		"select name from `tabFlock` where status != 'Closed' order by start_date desc",
+		"select name from `tabLivestock Batch` where status != 'Closed' order by start_date desc",
 		pluck=True,
 	)
 	return [
 		{
 			"name": name,
-			"start_date": frappe.db.get_value("Flock", name, "start_date"),
-			"remaining_birds": frappe.get_doc("Flock", name).remaining_birds(),
+			"start_date": frappe.db.get_value("Livestock Batch", name, "start_date"),
+			"remaining": frappe.get_doc("Livestock Batch", name).remaining(),
 		}
 		for name in names
 	]

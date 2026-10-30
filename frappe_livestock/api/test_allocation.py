@@ -3,7 +3,7 @@ from typing import ClassVar
 import frappe
 from frappe.tests import IntegrationTestCase
 
-from frappe_livestock.api.allocation import get_active_flocks, split_purchase_to_flocks
+from frappe_livestock.api.allocation import get_active_batches, split_purchase_to_batches
 from frappe_livestock.api.purchase import create_full_purchase
 from frappe_livestock.frappe_livestock.doctype.livestock_type.test_livestock_type import (
 	ensure_broiler_type,
@@ -24,7 +24,7 @@ def _ensure_feed_item():
 
 
 class _AllocationFixture(IntegrationTestCase):
-	FIXED_FLOCK_DATES: ClassVar = ["2026-08-01", "2026-09-01", "2026-10-01", "2026-10-28", "2026-11-14"]
+	FIXED_BATCH_DATES: ClassVar = ["2026-08-01", "2026-09-01", "2026-10-01", "2026-10-28", "2026-11-14"]
 
 	def setUp(self):
 		super().setUp()
@@ -33,22 +33,22 @@ class _AllocationFixture(IntegrationTestCase):
 		self._clear_fixed()
 
 	def _clear_fixed(self):
-		# Fixed-name flocks collide across runs whenever a committing test
+		# Fixed-name batches collide across runs whenever a committing test
 		# (create_full_purchase commits) persists them; clear for re-runnability.
-		for date in self.FIXED_FLOCK_DATES:
+		for date in self.FIXED_BATCH_DATES:
 			name = f"Broiler {date}"
-			for parent in frappe.get_all("Flock Cost Item", {"flock": name}, pluck="parent"):
-				if frappe.db.exists("Flock Cost", parent):
-					frappe.delete_doc("Flock Cost", parent, force=True)
-			for mortality in frappe.get_all("Mortality", {"flock": name}, pluck="name"):
+			for parent in frappe.get_all("Batch Cost Item", {"batch": name}, pluck="parent"):
+				if frappe.db.exists("Batch Cost", parent):
+					frappe.delete_doc("Batch Cost", parent, force=True)
+			for mortality in frappe.get_all("Mortality", {"batch": name}, pluck="name"):
 				frappe.delete_doc("Mortality", mortality, force=True)
-			if frappe.db.exists("Flock", name):
-				frappe.delete_doc("Flock", name, force=True)
+			if frappe.db.exists("Livestock Batch", name):
+				frappe.delete_doc("Livestock Batch", name, force=True)
 
-	def _flock(self, date, placed=500):
+	def _batch(self, date, placed=500):
 		return frappe.get_doc(
 			{
-				"doctype": "Flock",
+				"doctype": "Livestock Batch",
 				"livestock_type": "Broiler",
 				"start_date": date,
 				"quantity_placed": placed,
@@ -83,16 +83,16 @@ class TestAllocationSplit(_AllocationFixture):
 		super().setUp()
 		self.pi = self._real_pi()
 
-	def test_split_across_two_flocks_and_cost(self):
-		a = self._flock("2026-10-28")
-		b = self._flock("2026-11-14")
+	def test_split_across_two_batches_and_cost(self):
+		a = self._batch("2026-10-28")
+		b = self._batch("2026-11-14")
 		cost = frappe.get_doc(  # noqa: F841 -- kept verbatim per task brief
 			{
-				"doctype": "Flock Cost",
+				"doctype": "Batch Cost",
 				"purchase_invoice": self.pi,
 				"items": [
-					{"item_code": "Feed", "qty": 8, "amount": 80, "flock": a.name},
-					{"item_code": "Feed", "qty": 12, "amount": 120, "flock": b.name},
+					{"item_code": "Feed", "qty": 8, "amount": 80, "batch": a.name},
+					{"item_code": "Feed", "qty": 12, "amount": 120, "batch": b.name},
 				],
 			}
 		).insert()
@@ -105,17 +105,17 @@ class TestAllocationZeroBirds(_AllocationFixture):
 		super().setUp()
 		self.pi = self._real_pi()
 
-	def test_cost_per_bird_zero_when_all_dead(self):
-		a = self._flock("2026-10-28")
-		frappe.get_doc({"doctype": "Mortality", "flock": a.name, "qty": 500}).insert()
+	def test_cost_per_head_zero_when_all_dead(self):
+		a = self._batch("2026-10-28")
+		frappe.get_doc({"doctype": "Mortality", "batch": a.name, "qty": 500}).insert()
 		frappe.get_doc(
 			{
-				"doctype": "Flock Cost",
+				"doctype": "Batch Cost",
 				"purchase_invoice": self.pi,
-				"items": [{"item_code": "Feed", "qty": 8, "amount": 80, "flock": a.name}],
+				"items": [{"item_code": "Feed", "qty": 8, "amount": 80, "batch": a.name}],
 			}
 		).insert()
-		self.assertEqual(a.cost_per_bird(), 0.0)
+		self.assertEqual(a.cost_per_head(), 0.0)
 
 
 class TestAllocationDuplicate(_AllocationFixture):
@@ -125,24 +125,24 @@ class TestAllocationDuplicate(_AllocationFixture):
 
 	def test_duplicate_purchase_invoice_is_rejected(self):
 		base = {
-			"doctype": "Flock Cost",
+			"doctype": "Batch Cost",
 			"purchase_invoice": self.pi,
-			"items": [{"item_code": "Feed", "qty": 8, "amount": 80, "flock": self._flock("2026-10-28").name}],
+			"items": [{"item_code": "Feed", "qty": 8, "amount": 80, "batch": self._batch("2026-10-28").name}],
 		}
 		frappe.get_doc(base).insert()
 		with self.assertRaises(frappe.exceptions.DuplicateEntryError):
 			frappe.get_doc(base).insert()
 
 
-class TestSplitPurchaseToFlocks(_AllocationFixture):
+class TestSplitPurchaseToBatches(_AllocationFixture):
 	def setUp(self):
 		super().setUp()
 		# create_full_purchase commits, so prior runs may have left deterministic
-		# "Broiler 2031-*" flocks behind; clear them (cost docs first) for re-runnability.
-		for name in frappe.get_all("Flock", {"name": ["like", "Broiler 2031-%"]}, pluck="name"):
-			for parent in frappe.get_all("Flock Cost Item", {"flock": name}, pluck="parent"):
-				frappe.delete_doc("Flock Cost", parent, force=True)
-			frappe.delete_doc("Flock", name, force=True)
+		# "Broiler 2031-*" batches behind; clear them (cost docs first) for re-runnability.
+		for name in frappe.get_all("Livestock Batch", {"name": ["like", "Broiler 2031-%"]}, pluck="name"):
+			for parent in frappe.get_all("Batch Cost Item", {"batch": name}, pluck="parent"):
+				frappe.delete_doc("Batch Cost", parent, force=True)
+			frappe.delete_doc("Livestock Batch", name, force=True)
 
 	def _purchase(self, qty=20, rate=10):
 		company = frappe.defaults.get_user_default("company")
@@ -165,25 +165,25 @@ class TestSplitPurchaseToFlocks(_AllocationFixture):
 			company, supplier, warehouse, [{"item_code": "Feed", "qty": qty, "rate": rate}]
 		)
 
-	def _unique_flock(self, placed=500):
-		# create_full_purchase commits, so fixed-name flocks would collide on re-runs;
+	def _unique_batch(self, placed=500):
+		# create_full_purchase commits, so fixed-name batches would collide on re-runs;
 		# use a counter-derived future date for a unique autoname each call.
-		if not hasattr(self, "_flock_seq"):
-			self._flock_seq = 0
-		self._flock_seq += 1
-		n = self._flock_seq
+		if not hasattr(self, "_batch_seq"):
+			self._batch_seq = 0
+		self._batch_seq += 1
+		n = self._batch_seq
 		date = f"2031-{(n - 1) // 28 + 1:02d}-{(n - 1) % 28 + 1:02d}"
-		return self._flock(date, placed)
+		return self._batch(date, placed)
 
 	def test_split_derives_amount_from_invoice_rate(self):
 		res = self._purchase(qty=20, rate=10)
-		a = self._unique_flock()
-		b = self._unique_flock()
-		split_purchase_to_flocks(
+		a = self._unique_batch()
+		b = self._unique_batch()
+		split_purchase_to_batches(
 			res["purchase_invoice"],
 			[
-				{"item_code": "Feed", "qty": 8, "flock": a.name},
-				{"item_code": "Feed", "qty": 12, "flock": b.name},
+				{"item_code": "Feed", "qty": 8, "batch": a.name},
+				{"item_code": "Feed", "qty": 12, "batch": b.name},
 			],
 		)
 		self.assertEqual(a.total_cost(), 80.0)
@@ -191,35 +191,35 @@ class TestSplitPurchaseToFlocks(_AllocationFixture):
 
 	def test_split_upsert_replaces_rows_without_doubling(self):
 		res = self._purchase(qty=20, rate=10)
-		a = self._unique_flock()
-		b = self._unique_flock()
-		split_purchase_to_flocks(
+		a = self._unique_batch()
+		b = self._unique_batch()
+		split_purchase_to_batches(
 			res["purchase_invoice"],
 			[
-				{"item_code": "Feed", "qty": 8, "flock": a.name},
-				{"item_code": "Feed", "qty": 12, "flock": b.name},
+				{"item_code": "Feed", "qty": 8, "batch": a.name},
+				{"item_code": "Feed", "qty": 12, "batch": b.name},
 			],
 		)
-		split_purchase_to_flocks(res["purchase_invoice"], [{"item_code": "Feed", "qty": 20, "flock": a.name}])
-		costs = frappe.get_all("Flock Cost", {"purchase_invoice": res["purchase_invoice"]})
+		split_purchase_to_batches(res["purchase_invoice"], [{"item_code": "Feed", "qty": 20, "batch": a.name}])
+		costs = frappe.get_all("Batch Cost", {"purchase_invoice": res["purchase_invoice"]})
 		self.assertEqual(len(costs), 1)
-		doc = frappe.get_doc("Flock Cost", costs[0].name)
+		doc = frappe.get_doc("Batch Cost", costs[0].name)
 		self.assertEqual(len(doc.items), 1)
 		self.assertEqual(a.total_cost(), 200.0)
 		self.assertEqual(b.total_cost(), 0.0)
 
 	def test_split_throws_for_item_not_on_invoice(self):
-		a = self._unique_flock()
+		a = self._unique_batch()
 		with self.assertRaisesRegex(frappe.exceptions.ValidationError, "is not on Purchase Invoice"):
-			split_purchase_to_flocks("PI-FAKE", [{"item_code": "Feed", "qty": 1, "flock": a.name}])
+			split_purchase_to_batches("PI-FAKE", [{"item_code": "Feed", "qty": 1, "batch": a.name}])
 
-	def test_get_active_flocks_newest_first_excludes_closed(self):
-		closed = self._flock("2026-08-01")
-		older = self._flock("2026-09-01")
-		newer = self._flock("2026-10-01")
-		frappe.db.set_value("Flock", closed.name, "status", "Closed")
-		flocks = get_active_flocks()
-		names = [f["name"] for f in flocks]
+	def test_get_active_batches_newest_first_excludes_closed(self):
+		closed = self._batch("2026-08-01")
+		older = self._batch("2026-09-01")
+		newer = self._batch("2026-10-01")
+		frappe.db.set_value("Livestock Batch", closed.name, "status", "Closed")
+		batches = get_active_batches()
+		names = [f["name"] for f in batches]
 		self.assertNotIn(closed.name, names)
 		self.assertLess(names.index(newer.name), names.index(older.name))
-		self.assertEqual(flocks[names.index(newer.name)]["remaining_birds"], 500)
+		self.assertEqual(batches[names.index(newer.name)]["remaining"], 500)

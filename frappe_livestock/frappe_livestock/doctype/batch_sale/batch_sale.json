@@ -1,21 +1,29 @@
 {
  "actions": [],
  "allow_rename": 1,
- "autoname": "field:sales_invoice",
+ "autoname": "field:voucher_no",
  "creation": "2026-10-30 00:00:00.000000",
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "sales_invoice",
+  "voucher_type",
+  "voucher_no",
   "posting_date",
   "items"
  ],
  "fields": [
   {
-   "fieldname": "sales_invoice",
-   "fieldtype": "Link",
-   "label": "Sales Invoice",
-   "options": "Sales Invoice",
+   "fieldname": "voucher_type",
+   "fieldtype": "Select",
+   "label": "Voucher Type",
+   "options": "Sales Invoice\nPOS Invoice",
+   "reqd": 1
+  },
+  {
+   "fieldname": "voucher_no",
+   "fieldtype": "Dynamic Link",
+   "label": "Voucher No",
+   "options": "voucher_type",
    "reqd": 1,
    "unique": 1
   },
@@ -29,7 +37,7 @@
    "fieldname": "items",
    "fieldtype": "Table",
    "label": "Items",
-   "options": "Flock Sale Item"
+   "options": "Batch Sale Item"
   }
  ],
  "index_web_pages_for_search": 1,
@@ -38,7 +46,7 @@
  "modified": "2026-10-30 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Frappe Livestock",
- "name": "Flock Sale",
+ "name": "Batch Sale",
  "naming_rule": "By fieldname",
  "owner": "Administrator",
  "permissions": [

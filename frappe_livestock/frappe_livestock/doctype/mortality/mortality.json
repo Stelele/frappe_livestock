@@ -5,17 +5,17 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "flock",
+  "batch",
   "date",
   "qty",
   "reason"
  ],
  "fields": [
   {
-   "fieldname": "flock",
+   "fieldname": "batch",
    "fieldtype": "Link",
-   "label": "Flock",
-   "options": "Flock",
+   "label": "Livestock Batch",
+   "options": "Livestock Batch",
    "reqd": 1
   },
   {

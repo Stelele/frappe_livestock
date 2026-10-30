@@ -29,7 +29,7 @@
    "fieldname": "items",
    "fieldtype": "Table",
    "label": "Items",
-   "options": "Flock Cost Item"
+   "options": "Batch Cost Item"
   }
  ],
  "index_web_pages_for_search": 1,
@@ -38,7 +38,7 @@
  "modified": "2026-10-28 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Frappe Livestock",
- "name": "Flock Cost",
+ "name": "Batch Cost",
  "naming_rule": "By fieldname",
  "owner": "Administrator",
  "permissions": [

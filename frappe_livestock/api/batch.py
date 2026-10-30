@@ -2,13 +2,13 @@ import frappe
 
 
 @frappe.whitelist()
-def get_flock_summary(flock):
-	"""Return one dict with every computed Flock field for dashboards and reports.
+def get_batch_summary(batch):
+	"""Return one dict with every computed Livestock Batch field for dashboards and reports.
 
 	Pure delegation and shaping layer: all numbers come from the
-	Flock controller methods, assembled here under stable keys.
+	Livestock Batch controller methods, assembled here under stable keys.
 	"""
-	doc = frappe.get_doc("Flock", flock)
+	doc = frappe.get_doc("Livestock Batch", batch)
 	return {
 		"name": doc.name,
 		"livestock_type": doc.livestock_type,
@@ -18,10 +18,10 @@ def get_flock_summary(flock):
 		"expected_ready_date": doc.expected_ready_date(),
 		"quantity_placed": doc.quantity_placed,
 		"mortalities_total": doc.mortalities_total(),
-		"surviving_birds": doc.surviving_birds(),
-		"remaining_birds": doc.remaining_birds(),
-		"birds_sold": doc.birds_sold,
+		"surviving": doc.surviving(),
+		"remaining": doc.remaining(),
+		"sold": doc.sold,
 		"total_cost": doc.total_cost(),
-		"cost_per_bird": doc.cost_per_bird(),
+		"cost_per_head": doc.cost_per_head(),
 		"status": doc.status,
 	}

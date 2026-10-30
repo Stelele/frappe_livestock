@@ -5,8 +5,8 @@ holdings app). Design rules:
   "compute presentation on the client" rule).
 - Read-mostly: nothing here mutates; capture stays in the desk/phone surfaces.
 - Every endpoint is gated to System Manager / Livestock Dashboard.
-- Cost ledger = Flock Cost (allocations of purchase invoices); revenue ledger =
-  Flock Sale (allocations of sales invoices, written by the on_submit hook).
+- Cost ledger = Batch Cost (allocations of purchase invoices); revenue ledger =
+  Batch Sale (allocations of sales invoices, written by the on_submit hook).
 """
 
 import frappe
@@ -27,10 +27,10 @@ def _range_filter(from_date=None, to_date=None):
 	return filters
 
 
-def _ledger_items(child_doctype, parent_doctype, flock, from_date=None, to_date=None):
-	"""Child rows of one flock's ledger docs; the date range filters the PARENT
+def _ledger_items(child_doctype, parent_doctype, batch, from_date=None, to_date=None):
+	"""Child rows of one batch's ledger docs; the date range filters the PARENT
 	doc's posting_date (child tables carry no date of their own)."""
-	parents = frappe.get_all(child_doctype, filters={"flock": flock}, pluck="parent", distinct=True)
+	parents = frappe.get_all(child_doctype, filters={"batch": batch}, pluck="parent", distinct=True)
 	if not parents:
 		return []
 	if from_date or to_date:
@@ -43,33 +43,33 @@ def _ledger_items(child_doctype, parent_doctype, flock, from_date=None, to_date=
 	)
 
 
-def _flock_rows():
-	"""All flocks with their computed per-flock aggregates, in one pass each."""
-	flocks = frappe.get_all(
-		"Flock",
-		fields=["name", "livestock_type", "start_date", "quantity_placed", "status", "birds_sold"],
+def _batch_rows():
+	"""All batches with their computed per-batch aggregates, in one pass each."""
+	batches = frappe.get_all(
+		"Livestock Batch",
+		fields=["name", "livestock_type", "start_date", "quantity_placed", "status", "sold"],
 		order_by="start_date asc",
 	)
 
 	costs = dict(
 		frappe.db.sql(
-			"select flock, sum(amount) from `tabFlock Cost Item` group by flock"
+			"select batch, sum(amount) from `tabBatch Cost Item` group by batch"
 		)
 	)
 	revenues = dict(
 		frappe.db.sql(
-			"select flock, sum(amount) from `tabFlock Sale Item` group by flock"
+			"select batch, sum(amount) from `tabBatch Sale Item` group by batch"
 		)
 	)
 	mortalities = dict(
-		frappe.db.sql("select flock, sum(qty) from `tabMortality` group by flock")
+		frappe.db.sql("select batch, sum(qty) from `tabMortality` group by batch")
 	)
 
 	type_stages = {}
 	type_items = {}
 	for row in frappe.get_all(
 		"Livestock Type",
-		fields=["name", "chick_item", "finished_item"],
+		fields=["name", "stocking_item", "finished_item"],
 	):
 		type_items[row.name] = row
 		type_stages[row.name] = frappe.get_all(
@@ -84,34 +84,34 @@ def _flock_rows():
 	)
 
 	out = []
-	for flock in flocks:
-		age = max((frappe.utils.getdate(frappe.utils.today()) - frappe.utils.getdate(flock.start_date)).days, 0)
-		stages = type_stages.get(flock.livestock_type) or []
+	for batch in batches:
+		age = max((frappe.utils.getdate(frappe.utils.today()) - frappe.utils.getdate(batch.start_date)).days, 0)
+		stages = type_stages.get(batch.livestock_type) or []
 		stage = get_stage_for_age(stages, age)
 		last_day = max((s.end_day for s in stages), default=0)
-		total_cost = float(costs.get(flock.name) or 0)
-		revenue = float(revenues.get(flock.name) or 0)
-		mortalities_total = int(mortalities.get(flock.name) or 0)
-		surviving = int(flock.quantity_placed or 0) - mortalities_total
-		remaining = surviving - int(flock.birds_sold or 0)
+		total_cost = float(costs.get(batch.name) or 0)
+		revenue = float(revenues.get(batch.name) or 0)
+		mortalities_total = int(mortalities.get(batch.name) or 0)
+		surviving = int(batch.quantity_placed or 0) - mortalities_total
+		remaining = surviving - int(batch.sold or 0)
 		profit = revenue - total_cost
 		margin = (profit / revenue) if revenue else 0
 		out.append(
 			{
-				"name": flock.name,
-				"livestock_type": flock.livestock_type,
-				"start_date": flock.start_date,
-				"status": flock.status,
+				"name": batch.name,
+				"livestock_type": batch.livestock_type,
+				"start_date": batch.start_date,
+				"status": batch.status,
 				"age_days": age,
 				"stage": stage["stage_name"] if stage else None,
-				"expected_ready_date": frappe.utils.add_days(flock.start_date, last_day) if last_day else None,
-				"quantity_placed": int(flock.quantity_placed or 0),
+				"expected_ready_date": frappe.utils.add_days(batch.start_date, last_day) if last_day else None,
+				"quantity_placed": int(batch.quantity_placed or 0),
 				"mortalities_total": mortalities_total,
-				"surviving_birds": surviving,
-				"remaining_birds": remaining,
-				"birds_sold": int(flock.birds_sold or 0),
+				"surviving": surviving,
+				"remaining": remaining,
+				"sold": int(batch.sold or 0),
 				"total_cost": total_cost,
-				"cost_per_bird": (total_cost / surviving) if surviving else 0.0,
+				"cost_per_head": (total_cost / surviving) if surviving else 0.0,
 				"revenue": revenue,
 				"profit": profit,
 				"margin": margin,
@@ -122,11 +122,11 @@ def _flock_rows():
 
 @frappe.whitelist()
 def portfolio(company=None, status=None, from_date=None, to_date=None):
-	"""One row per flock with computed metrics. `company` is accepted for
-	interface stability but not yet filtered on (Flock carries no company in
+	"""One row per batch with computed metrics. `company` is accepted for
+	interface stability but not yet filtered on (Livestock Batch carries no company in
 	phase 1 — the farm operates one company)."""
 	_gate()
-	rows = _flock_rows()
+	rows = _batch_rows()
 	if status:
 		rows = [row for row in rows if row["status"] == status]
 	if from_date:
@@ -137,13 +137,13 @@ def portfolio(company=None, status=None, from_date=None, to_date=None):
 
 
 @frappe.whitelist()
-def flock_pl(flock, from_date=None, to_date=None):
-	"""Per-flock profit & loss: cost lines by category, revenue lines, totals."""
+def batch_pl(batch, from_date=None, to_date=None):
+	"""Per-batch profit & loss: cost lines by category, revenue lines, totals."""
 	_gate()
-	livestock_type = frappe.db.get_value("Flock", flock, "livestock_type")
-	chick_item = frappe.db.get_value("Livestock Type", livestock_type, "chick_item")
+	livestock_type = frappe.db.get_value("Livestock Batch", batch, "livestock_type")
+	stocking_item = frappe.db.get_value("Livestock Type", livestock_type, "stocking_item")
 
-	cost_rows = _ledger_items("Flock Cost Item", "Flock Cost", flock, from_date, to_date)
+	cost_rows = _ledger_items("Batch Cost Item", "Batch Cost", batch, from_date, to_date)
 
 	item_groups = {}
 	if cost_rows:
@@ -156,10 +156,10 @@ def flock_pl(flock, from_date=None, to_date=None):
 
 	costs = []
 	for row in cost_rows:
-		category = "chicks" if row.item_code == chick_item else (item_groups.get(row.item_code) or row.item_code)
+		category = "stocking" if row.item_code == stocking_item else (item_groups.get(row.item_code) or row.item_code)
 		costs.append({"category": category, "item_code": row.item_code, "qty": row.qty, "amount": row.amount})
 
-	sale_rows = _ledger_items("Flock Sale Item", "Flock Sale", flock, from_date, to_date)
+	sale_rows = _ledger_items("Batch Sale Item", "Batch Sale", batch, from_date, to_date)
 	revenue = [
 		{"item_code": row.item_code, "qty": row.qty, "amount": row.amount} for row in sale_rows
 	]
@@ -179,27 +179,24 @@ def flock_pl(flock, from_date=None, to_date=None):
 	}
 
 
-def _flock_vouchers(flock):
-	"""The accounting vouchers backing a flock: cost allocations (PI + their
+def _batch_vouchers(batch):
+	"""The accounting vouchers backing a batch: cost allocations (PI + their
 	receipts + payments) and sale allocations (Sales Invoices)."""
 	cost_invoices = [
 		row[0]
 		for row in frappe.db.sql(
 			"""select distinct fc.purchase_invoice
-			from `tabFlock Cost` fc join `tabFlock Cost Item` fci on fci.parent = fc.name
-			where fci.flock = %s""",
-			flock,
+			from `tabBatch Cost` fc join `tabBatch Cost Item` fci on fci.parent = fc.name
+			where fci.batch = %s""",
+			batch,
 		)
 	]
-	sale_invoices = [
-		row[0]
-		for row in frappe.db.sql(
-			"""select distinct fs.sales_invoice
-			from `tabFlock Sale` fs join `tabFlock Sale Item` fsi on fsi.parent = fs.name
-			where fsi.flock = %s""",
-			flock,
-		)
-	]
+	sale_vouchers = frappe.db.sql(
+		"""select distinct fs.voucher_type, fs.voucher_no
+		from `tabBatch Sale` fs join `tabBatch Sale Item` fsi on fsi.parent = fs.name
+		where fsi.batch = %s""",
+		batch,
+	)
 
 	receipts = []
 	payments = []
@@ -219,20 +216,23 @@ def _flock_vouchers(flock):
 			)
 		]
 
-	return {
+	vouchers = {
 		"Purchase Invoice": cost_invoices,
 		"Purchase Receipt": receipts,
 		"Payment Entry": payments,
-		"Sales Invoice": sale_invoices,
 	}
+	for voucher_type, voucher_no in sale_vouchers:
+		vouchers.setdefault(voucher_type, []).append(voucher_no)
+
+	return vouchers
 
 
 @frappe.whitelist()
-def flock_gl_entries(flock, from_date=None, to_date=None):
-	"""The journal entries backing a flock: GL Entries of every voucher its
+def batch_gl_entries(batch, from_date=None, to_date=None):
+	"""The journal entries backing a batch: GL Entries of every voucher its
 	cost/sale allocations point at. Raw rows; read-only join, no new writes."""
 	_gate()
-	vouchers = _flock_vouchers(flock)
+	vouchers = _batch_vouchers(batch)
 
 	conditions = []
 	values = []
@@ -261,12 +261,12 @@ def flock_gl_entries(flock, from_date=None, to_date=None):
 
 
 @frappe.whitelist()
-def feed_timeline(flock=None, from_date=None, to_date=None):
-	"""Raw feed rows: bag events for one flock (or all), in date order."""
+def feed_timeline(batch=None, from_date=None, to_date=None):
+	"""Raw feed rows: bag events for one batch (or all), in date order."""
 	_gate()
 	filters = [["event", "in", ["Open", "Finish"]]]
-	if flock:
-		filters.append(["flock", "=", flock])
+	if batch:
+		filters.append(["batch", "=", batch])
 	if from_date:
 		filters.append(["date", ">=", from_date])
 	if to_date:
@@ -274,18 +274,18 @@ def feed_timeline(flock=None, from_date=None, to_date=None):
 	return frappe.db.get_list(
 		"Feed Event",
 		filters=filters,
-		fields=["name", "flock", "feed_item", "event", "date", "qty"],
+		fields=["name", "batch", "feed_item", "event", "date", "qty"],
 		order_by="date asc",
 	)
 
 
 @frappe.whitelist()
-def mortality_rows(flock=None, from_date=None, to_date=None):
-	"""Raw mortality rows for one flock (or all), in date order."""
+def mortality_rows(batch=None, from_date=None, to_date=None):
+	"""Raw mortality rows for one batch (or all), in date order."""
 	_gate()
 	filters = []
-	if flock:
-		filters.append(["flock", "=", flock])
+	if batch:
+		filters.append(["batch", "=", batch])
 	if from_date:
 		filters.append(["date", ">=", from_date])
 	if to_date:
@@ -293,6 +293,6 @@ def mortality_rows(flock=None, from_date=None, to_date=None):
 	return frappe.db.get_list(
 		"Mortality",
 		filters=filters,
-		fields=["name", "flock", "date", "qty", "reason"],
+		fields=["name", "batch", "date", "qty", "reason"],
 		order_by="date asc",
 	)

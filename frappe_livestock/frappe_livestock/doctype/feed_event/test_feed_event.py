@@ -6,7 +6,7 @@ from frappe_livestock.frappe_livestock.doctype.livestock_type.test_livestock_typ
 	ensure_broiler_type,
 )
 
-# see test_flock.py: the Item/Purchase Invoice link walk trips ERPNext's bootstrap
+# see test_livestock_batch.py: the Item/Purchase Invoice link walk trips ERPNext's bootstrap
 IGNORE_TEST_RECORD_DEPENDENCIES = ["Item", "Purchase Invoice"]
 
 FEED_ITEM_CODE = "Early Lay Feed"
@@ -44,13 +44,13 @@ class TestFeedEvent(IntegrationTestCase):
 		super().setUp()
 		ensure_broiler_type()
 		ensure_feed_item()
-		if frappe.db.exists("Flock", f"Broiler {today()}"):
-			frappe.delete_doc("Flock", f"Broiler {today()}", force=True)
+		if frappe.db.exists("Livestock Batch", f"Broiler {today()}"):
+			frappe.delete_doc("Livestock Batch", f"Broiler {today()}", force=True)
 
 	def test_feed_event_saves(self):
-		flock = frappe.get_doc(
+		batch = frappe.get_doc(
 			{
-				"doctype": "Flock",
+				"doctype": "Livestock Batch",
 				"livestock_type": "Broiler",
 				"start_date": today(),
 				"quantity_placed": 500,
@@ -59,7 +59,7 @@ class TestFeedEvent(IntegrationTestCase):
 		doc = frappe.get_doc(
 			{
 				"doctype": "Feed Event",
-				"flock": flock.name,
+				"batch": batch.name,
 				"feed_item": FEED_ITEM_CODE,
 				"event": "Open",
 				"qty": 1,

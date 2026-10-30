@@ -1,45 +1,45 @@
-// Flock Dashboard logic, loaded on the flock-dashboard page via the `page_js`
+// Batch Dashboard logic, loaded on the batch-dashboard page via the `page_js`
 // hook (see hooks.py). Page scripts and `page_js` files are concatenated into
 // one page script with the hook file appended last, so this definition is the
 // on_page_load handler that sticks; the page-folder file stays a minimal shell.
 //
-// The flock picker is a body-mounted FieldGroup (NOT page.add_field): in v16
+// The batch picker is a body-mounted FieldGroup (NOT page.add_field): in v16
 // the page-form area add_field targets is not rendered on this layout, which
 // left the dashboard with no visible selector.
-frappe.pages["flock-dashboard"].on_page_load = function (wrapper) {
+frappe.pages["batch-dashboard"].on_page_load = function (wrapper) {
 	var page = frappe.ui.make_app_page({
 		parent: wrapper,
-		title: __("Flock Dashboard"),
+		title: __("Batch Dashboard"),
 		single_column: true,
 	});
 
-	var $picker = $('<div class="flock-picker"></div>').appendTo(page.body);
-	var $summary = $('<div class="flock-summary"></div>').appendTo(page.body);
+	var $picker = $('<div class="batch-picker"></div>').appendTo(page.body);
+	var $summary = $('<div class="batch-summary"></div>').appendTo(page.body);
 
 	var picker = new frappe.ui.FieldGroup({
 		parent: $picker.get(0),
 		fields: [
 			{
-				fieldname: "flock",
-				label: __("Flock"),
+				fieldname: "batch",
+				label: __("Livestock Batch"),
 				fieldtype: "Link",
-				options: "Flock",
+				options: "Livestock Batch",
 				onchange: function () {
-					render_summary(picker.get_value("flock"));
+					render_summary(picker.get_value("batch"));
 				},
 			},
 		],
 	});
 	picker.make();
 	// expose for tests / programmatic use
-	wrapper.page.flock_picker = picker;
+	wrapper.page.batch_picker = picker;
 
 	function render_summary(name) {
 		if (!name) {
 			$summary.empty();
 			return;
 		}
-		frappe.call("frappe_livestock.api.flock.get_flock_summary", { flock: name }).then((r) => {
+		frappe.call("frappe_livestock.api.batch.get_batch_summary", { batch: name }).then((r) => {
 			var s = r.message || {};
 			var rows = [
 				[__("Livestock Type"), s.livestock_type],
@@ -49,11 +49,11 @@ frappe.pages["flock-dashboard"].on_page_load = function (wrapper) {
 				[__("Expected Ready Date"), s.expected_ready_date],
 				[__("Quantity Placed"), s.quantity_placed],
 				[__("Mortalities"), s.mortalities_total],
-				[__("Surviving Birds"), s.surviving_birds],
-				[__("Remaining Birds"), s.remaining_birds],
-				[__("Birds Sold"), s.birds_sold],
+				[__("Surviving Birds"), s.surviving],
+				[__("Remaining Birds"), s.remaining],
+				[__("Birds Sold"), s.sold],
 				[__("Total Cost"), s.total_cost],
-				[__("Cost per Bird"), s.cost_per_bird],
+				[__("Cost per Bird"), s.cost_per_head],
 				[__("Status"), s.status],
 			]
 				.map(
@@ -67,13 +67,13 @@ frappe.pages["flock-dashboard"].on_page_load = function (wrapper) {
 		});
 	}
 
-	// Default to the most-recent non-closed flock. When there is no active
-	// flock, stay empty and let the human pick manually (no alert).
-	frappe.call("frappe_livestock.api.allocation.get_active_flocks").then((r) => {
-		var flocks = r.message || [];
-		if (!flocks.length) {
+	// Default to the most-recent non-closed batch. When there is no active
+	// batch, stay empty and let the human pick manually (no alert).
+	frappe.call("frappe_livestock.api.allocation.get_active_batches").then((r) => {
+		var batches = r.message || [];
+		if (!batches.length) {
 			return;
 		}
-		picker.set_value("flock", flocks[0].name);
+		picker.set_value("batch", batches[0].name);
 	});
 };

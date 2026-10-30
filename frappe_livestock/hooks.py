@@ -40,13 +40,13 @@ app_license = "mit"
 # webform_include_css = {"doctype": "public/css/doctype.css"}
 
 # include js in page
-page_js = {"flock-dashboard": "public/js/flock_dashboard.js", "purchase-entry": "public/js/purchase_entry.js"}
+page_js = {"batch-dashboard": "public/js/batch_dashboard.js", "purchase-entry": "public/js/purchase_entry.js"}
 
 # include js in doctype views
 doctype_js = {
 	"Mortality": "public/js/mortality.js",
 	"Feed Event": "public/js/feed_event.js",
-	"Flock": "public/js/flock.js",
+	"Livestock Batch": "public/js/livestock_batch.js",
 }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
 # doctype_tree_js = {"doctype" : "public/js/doctype_tree.js"}
@@ -145,7 +145,13 @@ after_migrate = "frappe_livestock.installer.after_migrate"
 
 doc_events = {
 	"Sales Invoice": {
-		"on_submit": "frappe_livestock.api.sales.allocate_sales_to_ready_flocks",
+		"on_submit": "frappe_livestock.api.sales.allocate_sales_to_ready_batches",
+		"on_cancel": "frappe_livestock.api.sales.revoke_sale_allocation",
+	},
+	# the shop sells through POS: POS Settings.invoice_type picks which doctype
+	# the POS creates, so both are hooked — the inactive one never fires
+	"POS Invoice": {
+		"on_submit": "frappe_livestock.api.sales.allocate_sales_to_ready_batches",
 		"on_cancel": "frappe_livestock.api.sales.revoke_sale_allocation",
 	},
 }

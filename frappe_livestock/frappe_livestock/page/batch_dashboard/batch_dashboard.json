@@ -6,9 +6,9 @@
  "modified": "2026-10-28 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Frappe Livestock",
- "name": "flock-dashboard",
+ "name": "batch-dashboard",
  "owner": "Administrator",
- "page_name": "flock-dashboard",
+ "page_name": "batch-dashboard",
  "roles": [
   {
    "role": "System Manager"
@@ -18,5 +18,5 @@
  "standard": "Yes",
  "style": null,
  "system_page": 0,
- "title": "Flock Dashboard"
+ "title": "Batch Dashboard"
 }

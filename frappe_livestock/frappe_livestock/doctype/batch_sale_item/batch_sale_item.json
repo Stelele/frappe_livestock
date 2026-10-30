@@ -8,7 +8,7 @@
   "item_code",
   "qty",
   "amount",
-  "flock"
+  "batch"
  ],
  "fields": [
   {
@@ -31,11 +31,11 @@
    "label": "Amount"
   },
   {
-   "fieldname": "flock",
+   "fieldname": "batch",
    "fieldtype": "Link",
    "in_list_view": 1,
-   "label": "Flock",
-   "options": "Flock",
+   "label": "Livestock Batch",
+   "options": "Livestock Batch",
    "reqd": 1
   }
  ],
@@ -45,7 +45,7 @@
  "modified": "2026-10-30 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Frappe Livestock",
- "name": "Flock Sale Item",
+ "name": "Batch Sale Item",
  "owner": "Administrator",
  "permissions": [
   {

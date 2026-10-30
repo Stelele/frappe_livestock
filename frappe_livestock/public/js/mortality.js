@@ -1,17 +1,17 @@
 frappe.ui.form.on("Mortality", {
 	onload(frm) {
-		if (!frm.is_new() || frm.doc.flock) {
+		if (!frm.is_new() || frm.doc.batch) {
 			return;
 		}
 		if (!frm.doc.date) {
 			frm.set_value("date", frappe.datetime.get_today());
 		}
-		frappe.call("frappe_livestock.api.allocation.get_active_flocks").then((r) => {
-			const flocks = r.message || [];
-			if (!flocks.length || frm.doc.flock) {
+		frappe.call("frappe_livestock.api.allocation.get_active_batches").then((r) => {
+			const batches = r.message || [];
+			if (!batches.length || frm.doc.batch) {
 				return;
 			}
-			frm.set_value("flock", flocks[0].name);
+			frm.set_value("batch", batches[0].name);
 		});
 	},
 });

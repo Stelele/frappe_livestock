@@ -5,7 +5,7 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
-  "flock",
+  "batch",
   "feed_item",
   "event",
   "date",
@@ -13,10 +13,10 @@
  ],
  "fields": [
   {
-   "fieldname": "flock",
+   "fieldname": "batch",
    "fieldtype": "Link",
-   "label": "Flock",
-   "options": "Flock",
+   "label": "Livestock Batch",
+   "options": "Livestock Batch",
    "reqd": 1
   },
   {

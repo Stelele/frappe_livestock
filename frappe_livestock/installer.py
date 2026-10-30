@@ -12,11 +12,11 @@ LIVESTOCK_DASHBOARD_ROLE = "Livestock Dashboard"
 # add_permission preserves standard perms by copying them into Custom DocPerm first.
 REPORTING_PERMISSIONS = {
 	# livestock doctypes
-	"Flock": {"read": 1},
-	"Flock Cost": {"read": 1},
-	"Flock Cost Item": {"read": 1},
-	"Flock Sale": {"read": 1},
-	"Flock Sale Item": {"read": 1},
+	"Livestock Batch": {"read": 1},
+	"Batch Cost": {"read": 1},
+	"Batch Cost Item": {"read": 1},
+	"Batch Sale": {"read": 1},
+	"Batch Sale Item": {"read": 1},
 	"Livestock Type": {"read": 1},
 	"Livestock Stage": {"read": 1},
 	"Housing": {"read": 1},

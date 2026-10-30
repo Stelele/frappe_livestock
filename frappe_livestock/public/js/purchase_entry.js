@@ -1,8 +1,8 @@
 // Livestock Purchase page: record a purchase in one action (PO -> Receipt ->
 // Invoice -> Payment, supplier paid in full on the spot) and allocate its bags
-// across the flocks they apply to, so cost-per-bird stays live. Loaded on the
+// across the batches they apply to, so cost-per-head stays live. Loaded on the
 // purchase-entry page via the `page_js` hook (appended last, so this definition
-// sticks), mirroring flock_dashboard.js.
+// sticks), mirroring batch_dashboard.js.
 frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 	var page = frappe.ui.make_app_page({
 		parent: wrapper,
@@ -26,8 +26,8 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 		 </p>
 		 <p><button class="btn btn-primary" id="create-purchase">${__("Create purchase")}</button></p>
 		 <hr>
-		 <h4>${__("Allocate to flocks")}</h4>
-		 <p class="text-muted form-text">${__("Split a purchase's bags between the flocks they apply to. Cost per bird updates immediately.")}</p>
+		 <h4>${__("Allocate to batches")}</h4>
+		 <p class="text-muted form-text">${__("Split a purchase's bags between the batches they apply to. Cost per head updates immediately.")}</p>
 		 <div class="allocate-head-fields"></div>
 		 <div class="allocate-item-rows"></div>
 		 <p class="text-muted">
@@ -139,7 +139,7 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 	});
 
 	// ---------------------------------------------------------------
-	// Allocate to flocks
+	// Allocate to batches
 	// ---------------------------------------------------------------
 	var allocate_head = new frappe.ui.FieldGroup({
 		parent: page.body.find(".allocate-head-fields").get(0),
@@ -163,15 +163,15 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 		var fg = make_row($row, [
 			make_field({ name: "item_code", label: "Item", type: "Link", options: "Item", reqd: 1 }),
 			{ fieldtype: "Column Break" },
-			make_field({ name: "flock", label: "Flock", type: "Link", options: "Flock", reqd: 1 }),
+			make_field({ name: "batch", label: "Livestock Batch", type: "Link", options: "Livestock Batch", reqd: 1 }),
 			{ fieldtype: "Column Break" },
 			make_field({ name: "qty", label: "Qty", type: "Float", reqd: 1 }),
 		]);
 		allocate_rows.push(fg);
 		if (values) {
 			fg.fields_dict.item_code.set_input(values.item_code);
-			if (values.flock) {
-				fg.fields_dict.flock.set_input(values.flock);
+			if (values.batch) {
+				fg.fields_dict.batch.set_input(values.batch);
 			}
 			fg.fields_dict.qty.set_input(values.qty);
 		}
@@ -215,27 +215,27 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 		page.body.find(".allocate-item-rows .allocate-item-row").each(function () {
 			var row = $(this);
 			var item_code = row.find("input[data-fieldname='item_code']").val();
-			var flock = row.find("input[data-fieldname='flock']").val();
-			if (!item_code || !flock) {
+			var batch = row.find("input[data-fieldname='batch']").val();
+			if (!item_code || !batch) {
 				return;
 			}
 			allocations.push({
 				item_code: item_code,
-				flock: flock,
+				batch: batch,
 				qty: flt(row.find("input[data-fieldname='qty']").val()),
 			});
 		});
 		if (!allocations.length) {
-			frappe.msgprint(__("Fill at least one row: item, flock and qty."));
+			frappe.msgprint(__("Fill at least one row: item, batch and qty."));
 			return;
 		}
-		frappe.call("frappe_livestock.api.allocation.split_purchase_to_flocks", {
+		frappe.call("frappe_livestock.api.allocation.split_purchase_to_batches", {
 			purchase_invoice: invoice,
 			allocations: allocations,
 		}).then(function (r) {
 			var made = r.message || {};
 			frappe.msgprint(
-				__("Allocated to flocks — Flock Cost {0}. Cost per bird is live on the dashboard.", [
+				__("Allocated to batches — Batch Cost {0}. Cost per head is live on the dashboard.", [
 					made && made.name ? made.name : invoice,
 				])
 			);

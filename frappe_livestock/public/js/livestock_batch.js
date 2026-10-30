@@ -1,15 +1,15 @@
-// Flock form: the "Day-old chicks" link — buy the chicks for THIS flock in one
+// Livestock Batch form: the stocking link — buy the batch's young stock in one
 // action (full purchase chain, paid on the spot, allocated here as initial
-// cost), or link an already-paid chick purchase invoice.
-frappe.ui.form.on("Flock", {
+// action (full purchase cycle, paid on the spot, allocated here as initial
+frappe.ui.form.on("Livestock Batch", {
 	refresh(frm) {
 		if (frm.is_new()) {
-			// save the flock first: the chick purchase needs quantity_placed
-			frm.set_intro(__("Save the flock to record its day-old chicks."));
+			// cost), or link an already-paid stocking purchase invoice.
+			frm.set_intro(__("<.stocking intro>"));
 			return;
 		}
-		if (!frm.doc.chick_purchase_invoice) {
-			frm.add_custom_button(__("Buy day-old chicks"), () => show_buy_dialog(frm));
+		if (!frm.doc.stocking_purchase_invoice) {
+			frm.add_custom_button(__("Buy stock"), () => show_buy_dialog(frm));
 		}
 	},
 });
@@ -17,7 +17,7 @@ frappe.ui.form.on("Flock", {
 function show_buy_dialog(frm) {
 	var company = frappe.defaults.get_user_default("company");
 	var dialog = new frappe.ui.Dialog({
-		title: __("Buy day-old chicks"),
+		title: __("Buy stock"),
 		fields: [
 			{
 				fieldname: "supplier",
@@ -34,7 +34,7 @@ function show_buy_dialog(frm) {
 				reqd: 1,
 				get_query: { filters: [["is_group", "=", 0], ["company", "=", company]] },
 			},
-			{ fieldname: "rate", label: __("Rate per chick"), fieldtype: "Currency", reqd: 1 },
+			{ fieldname: "rate", label: __("Rate per head"), fieldtype: "Currency", reqd: 1 },
 			{ fieldname: "invoice_date", label: __("Invoice date"), fieldtype: "Date", default: "Today" },
 			{
 				fieldname: "mode_of_payment",
@@ -46,10 +46,10 @@ function show_buy_dialog(frm) {
 			},
 			{ fieldname: "invoice_number", label: __("Supplier invoice no."), fieldtype: "Data" },
 		],
-		primary_action_label: __("Buy {0} chicks", [frm.doc.quantity_placed]),
+		primary_action_label: __("Buy {0} head", [frm.doc.quantity_placed]),
 		primary_action(values) {
-			frappe.call("frappe_livestock.api.chicks.create_chick_purchase", {
-				flock: frm.doc.name,
+			frappe.call("frappe_livestock.api.stocking.create_stocking_purchase", {
+				batch: frm.doc.name,
 				supplier: values.supplier,
 				warehouse: values.warehouse,
 				rate: values.rate,
@@ -61,7 +61,7 @@ function show_buy_dialog(frm) {
 				dialog.hide();
 				var made = r.message || {};
 				frappe.msgprint(
-					__("Chicks purchased ({0}) and costed to this flock.", [made.purchase_invoice])
+					__("Stock purchased ({0}) and costed to this batch.", [made.purchase_invoice])
 				);
 				frm.reload_doc();
 			});

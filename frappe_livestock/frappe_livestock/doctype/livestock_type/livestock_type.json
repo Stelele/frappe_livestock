@@ -7,7 +7,7 @@
  "engine": "InnoDB",
  "field_order": [
   "livestock_type_name",
-  "chick_item",
+  "stocking_item",
   "finished_item",
   "stages"
  ],
@@ -20,9 +20,9 @@
    "unique": 1
   },
   {
-   "fieldname": "chick_item",
+   "fieldname": "stocking_item",
    "fieldtype": "Link",
-   "label": "Chick Item (day-old stock)",
+   "label": "Stocking Item (day-old chicks, piglets, fingerlings…)",
    "options": "Item"
   },
   {

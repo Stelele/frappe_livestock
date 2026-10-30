@@ -1,7 +1,7 @@
 import frappe
 from frappe.tests import IntegrationTestCase
-from frappe_livestock.api.chicks import create_chick_purchase
-from frappe_livestock.api.reporting import flock_gl_entries, flock_pl, portfolio
+from frappe_livestock.api.stocking import create_stocking_purchase
+from frappe_livestock.api.reporting import batch_gl_entries, batch_pl, portfolio
 
 
 def _ensure_item(code, group="Products"):
@@ -29,7 +29,7 @@ class TestReporting(IntegrationTestCase):
 	@classmethod
 	def setUpClass(cls):
 		super().setUpClass()
-		# one seeded scenario every test reads: a flock with chicks + feed costs
+		# one seeded scenario every test reads: a batch with head + feed costs
 		# and a submitted sale, built through the real APIs
 		_ensure_item("Day Old Chick")
 		_ensure_item("Layer Feed 50kg")
@@ -37,8 +37,8 @@ class TestReporting(IntegrationTestCase):
 
 		type_doc = frappe.get_doc("Livestock Type", "Broiler")
 		changed = False
-		if not type_doc.chick_item:
-			type_doc.chick_item = "Day Old Chick"
+		if not type_doc.stocking_item:
+			type_doc.stocking_item = "Day Old Chick"
 			changed = True
 		if not type_doc.finished_item:
 			type_doc.finished_item = "Broiler Bird"
@@ -48,16 +48,16 @@ class TestReporting(IntegrationTestCase):
 
 		supplier = _supplier()
 		warehouse = _warehouse()
-		frappe.db.delete("Flock Cost Item", {"flock": "Broiler 2026-08-15"})
-		frappe.db.delete("Flock Sale Item", {"flock": "Broiler 2026-08-15"})
-		frappe.db.delete("Flock", {"name": "Broiler 2026-08-15"})
+		frappe.db.delete("Batch Cost Item", {"batch": "Broiler 2026-08-15"})
+		frappe.db.delete("Batch Sale Item", {"batch": "Broiler 2026-08-15"})
+		frappe.db.delete("Livestock Batch", {"name": "Broiler 2026-08-15"})
 
-		cls.flock = frappe.get_doc(
-			{"doctype": "Flock", "livestock_type": "Broiler", "start_date": "2026-08-15", "quantity_placed": 500}
+		cls.batch = frappe.get_doc(
+			{"doctype": "Livestock Batch", "livestock_type": "Broiler", "start_date": "2026-08-15", "quantity_placed": 500}
 		).insert()
-		cls.flock_name = cls.flock.name
+		cls.batch_name = cls.batch.name
 
-		create_chick_purchase(flock=cls.flock_name, supplier=supplier, warehouse=warehouse, rate=1.2)
+		create_stocking_purchase(batch=cls.batch_name, supplier=supplier, warehouse=warehouse, rate=1.2)
 
 		from frappe_livestock.api.purchase import create_full_purchase
 
@@ -67,14 +67,14 @@ class TestReporting(IntegrationTestCase):
 			warehouse=warehouse,
 			items=[{"item_code": "Layer Feed 50kg", "qty": 10, "rate": 50}],
 		)
-		from frappe_livestock.api.allocation import split_purchase_to_flocks
+		from frappe_livestock.api.allocation import split_purchase_to_batches
 
-		split_purchase_to_flocks(
+		split_purchase_to_batches(
 			purchase_invoice=feed_buy["purchase_invoice"],
-			allocations=[{"item_code": "Layer Feed 50kg", "flock": cls.flock_name, "qty": 10}],
+			allocations=[{"item_code": "Layer Feed 50kg", "batch": cls.batch_name, "qty": 10}],
 		)
 
-		cls.flock.db_set("status", "Ready", update_modified=False)
+		cls.batch.db_set("status", "Ready", update_modified=False)
 
 		customer = frappe.db.get_value("Customer", {"customer_name": "Hook Customer"}, "name")
 		if not customer:
@@ -114,32 +114,32 @@ class TestReporting(IntegrationTestCase):
 		# revoke through the cancel hook to leave no rows behind
 		from frappe_livestock.api.sales import revoke_sale_allocation
 
-		if frappe.db.exists("Flock Sale", cls.sale.name):
-			revoke_sale_allocation(cls.sale.name)
-		frappe.db.delete("Flock Cost Item", {"flock": cls.flock_name})
-		frappe.db.delete("Flock Sale Item", {"flock": cls.flock_name})
-		frappe.db.delete("Flock", {"name": cls.flock_name})
+		if frappe.db.exists("Batch Sale", cls.sale.name):
+			revoke_sale_allocation(cls.sale)
+		frappe.db.delete("Batch Cost Item", {"batch": cls.batch_name})
+		frappe.db.delete("Batch Sale Item", {"batch": cls.batch_name})
+		frappe.db.delete("Livestock Batch", {"name": cls.batch_name})
 		super().tearDownClass()
 
 	def test_portfolio_row_has_revenue_and_profit(self):
 		rows = portfolio()
-		row = next(r for r in rows if r["name"] == self.flock_name)
-		self.assertEqual(row["total_cost"], 1100.0)  # 600 chicks + 500 feed
+		row = next(r for r in rows if r["name"] == self.batch_name)
+		self.assertEqual(row["total_cost"], 1100.0)  # 600 head + 500 feed
 		self.assertEqual(row["revenue"], 3000.0)  # 100 birds @ 30
 		self.assertEqual(row["profit"], 1900.0)
 		self.assertAlmostEqual(row["margin"], 1900 / 3000, places=4)
-		self.assertEqual(row["remaining_birds"], 400)
+		self.assertEqual(row["remaining"], 400)
 
-	def test_flock_pl_splits_cost_categories(self):
-		pl = flock_pl(self.flock_name)
+	def test_batch_pl_splits_cost_categories(self):
+		pl = batch_pl(self.batch_name)
 		categories = {row["category"]: row["amount"] for row in pl["costs"]}
-		self.assertEqual(categories.get("chicks"), 600.0)
+		self.assertEqual(categories.get("stocking"), 600.0)
 		self.assertEqual(categories.get("Products"), 500.0)  # feed item's item group
 		self.assertEqual(pl["totals"]["total_revenue"], 3000.0)
 		self.assertEqual(pl["totals"]["profit"], 1900.0)
 
-	def test_flock_gl_entries_join_through_allocations(self):
-		rows = flock_gl_entries(self.flock_name)
+	def test_batch_gl_entries_join_through_allocations(self):
+		rows = batch_gl_entries(self.batch_name)
 		self.assertTrue(rows)
 		vouchers = {(row.voucher_type, row.voucher_no) for row in rows}
 		self.assertIn(("Sales Invoice", self.sale.name), vouchers)  # revenue side
@@ -147,7 +147,7 @@ class TestReporting(IntegrationTestCase):
 		self.assertTrue(any(v[0] == "Purchase Invoice" for v in vouchers))
 		self.assertTrue(any(v[0] == "Payment Entry" for v in vouchers))
 		# date filter excludes everything when the window is in the future
-		future = flock_gl_entries(self.flock_name, from_date="2999-01-01")
+		future = batch_gl_entries(self.batch_name, from_date="2999-01-01")
 		self.assertEqual(future, [])
 
 	def test_reporting_is_role_gated(self):
