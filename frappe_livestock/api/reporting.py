@@ -263,7 +263,7 @@ def batch_gl_entries(batch, from_date=None, to_date=None):
 
 @frappe.whitelist()
 def feed_timeline(batch=None, from_date=None, to_date=None):
-	"""Raw feed rows: bag events for one batch (or all), in date order."""
+	"""Raw feed consumption rows for one batch (or all), in date order."""
 	_gate()
 	filters = []
 	if batch:
