@@ -55,11 +55,7 @@ def allocate_sales_to_ready_batches_for_type(batch_type, qty, voucher_type=None,
 	if voucher_no and allocated_per_batch:
 		_record_batch_sale(batch_type, voucher_type, voucher_no, allocated_per_batch, rate)
 
-	if remaining and frappe.request is not None:
-		# Hook-context shortfall warning: some finished birds fit in NO Ready
-		# batch. msgprint is safe outside a request too (it just appends to
-		# the message log), so the `frappe.request` guard reads as
-		# "hook context" without ever breaking background/test callers.
+	if remaining and getattr(frappe.local, "request", None):
 		# NOTE: msgprint takes (msg, indicator=...) — the dict form would
 		# crash safe_decode, so the brief's dict literal is spelled out here.
 		frappe.msgprint(
@@ -203,6 +199,8 @@ def create_batch_sales_invoice(batch, qty, customer, rate, mode_of_payment="Cash
 	`f"Only {allocated} of {qty} allocated — batch ready-state ceilings hit"`
 	when any unit fit in NO Ready batch (unallocated is 0 on success).
 
+	Caller needs Sales Invoice create/submit permission (no permission bypass here).
+
 	`mode_of_payment` is accepted for the Task 14 dashboard call signature;
 	voucher_type is always "Sales Invoice" (POS is out of scope).
 	"""
@@ -212,14 +210,19 @@ def create_batch_sales_invoice(batch, qty, customer, rate, mode_of_payment="Cash
 		frappe.throw(f"Livestock Type {batch_doc.livestock_type} has no finished item set.")
 
 	qty = int(qty or 0)
+	if qty <= 0:
+		frappe.throw("Qty must be at least 1")
 	remaining = batch_doc.remaining()
 	if qty > remaining:
 		frappe.throw(f"Only {remaining} head remain on batch {batch}")
 
+	company = frappe.defaults.get_user_default("company")
+	if not company:
+		frappe.throw(frappe._("Company is not set for this user. Set the company user default."))
 	si = frappe.get_doc(
 		{
 			"doctype": "Sales Invoice",
-			"company": frappe.defaults.get_user_default("company"),
+			"company": company,
 			"customer": customer,
 			"posting_date": today(),
 			"items": [{"item_code": finished_item, "qty": qty, "rate": flt(rate)}],
