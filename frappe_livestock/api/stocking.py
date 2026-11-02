@@ -25,7 +25,7 @@ def _stocking_lines(batch_doc, purchase_invoice):
 	return lines
 
 
-def _allocate_to_batch(batch_name, purchase_invoice):
+def _allocate_to_batch(batch_name, purchase_invoice, force=None):
 	"""Allocate an invoice's stocking lines to one batch (idempotent upsert) and
 	link the invoice on the batch. Same cost mechanism as feed: Batch Cost rows."""
 	batch_doc = frappe.get_doc("Livestock Batch", batch_name)
@@ -34,6 +34,7 @@ def _allocate_to_batch(batch_name, purchase_invoice):
 	split_purchase_to_batches(
 		purchase_invoice,
 		[{"item_code": row.item_code, "batch": batch_name, "qty": row.qty} for row in lines],
+		force=force,
 	)
 
 	if batch_doc.stocking_purchase_invoice != purchase_invoice:
@@ -41,14 +42,19 @@ def _allocate_to_batch(batch_name, purchase_invoice):
 			"Livestock Batch", batch_name, "stocking_purchase_invoice", purchase_invoice, update_modified=False
 		)
 
+	if batch_doc.housing:
+		housing_doc = frappe.get_doc("Housing", batch_doc.housing)
+		if housing_doc.status != "Occupied":
+			housing_doc.mark_occupied()
+
 	return {"batch": batch_name, "purchase_invoice": purchase_invoice}
 
 
 @frappe.whitelist()
-def link_stocking_purchase(batch, purchase_invoice):
+def link_stocking_purchase(batch, purchase_invoice, force=None):
 	"""Link an existing (already-paid) stocking purchase to a batch and allocate
 	its stocking lines as the batch's initial cost."""
-	return _allocate_to_batch(batch, purchase_invoice)
+	return _allocate_to_batch(batch, purchase_invoice, force=force)
 
 
 @frappe.whitelist()
@@ -69,6 +75,12 @@ def create_stocking_purchase(
 	livestock_type = frappe.get_doc("Livestock Type", batch_doc.livestock_type)
 	if not livestock_type.stocking_item:
 		frappe.throw(frappe._("Set a Stocking Item on Livestock Type {0} first.").format(livestock_type.name))
+
+	if not batch_doc.housing:
+		frappe.throw(f"Set a Housing on batch {batch} before buying stock.")
+	capacity = frappe.db.get_value("Housing", batch_doc.housing, "capacity") or 0
+	if capacity > 0 and (batch_doc.quantity_placed or 0) > capacity:
+		frappe.throw(f"{batch_doc.quantity_placed} head exceeds housing capacity {capacity}")
 
 	rate = flt(rate)
 	if rate < 0:

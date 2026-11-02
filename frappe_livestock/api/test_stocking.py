@@ -47,6 +47,11 @@ class TestStockingCost(IntegrationTestCase):
 
 		self.supplier = _ensure_supplier()
 		self.warehouse = _warehouse()
+		if frappe.db.exists("Housing", "Test Coop"):
+			frappe.delete_doc("Housing", "Test Coop", force=True)
+		self.housing = frappe.get_doc(
+			{"doctype": "Housing", "housing_name": "Test Coop", "housing_type": "General", "capacity": 1000}
+		).insert()
 		self.batch_name = f"Broiler {frappe.utils.today()}"
 		# the purchase chain commits internally, so docs from earlier runs can
 		# survive the test rollback — clear this batch's rows before re-inserting
@@ -54,7 +59,32 @@ class TestStockingCost(IntegrationTestCase):
 		frappe.db.delete("Mortality", {"batch": self.batch_name})
 		frappe.db.delete("Livestock Batch", {"name": self.batch_name})
 		self.batch = frappe.get_doc(
-			{"doctype": "Livestock Batch", "livestock_type": "Broiler", "start_date": frappe.utils.today(), "quantity_placed": 500}
+			{
+				"doctype": "Livestock Batch",
+				"livestock_type": "Broiler",
+				"start_date": frappe.utils.today(),
+				"quantity_placed": 500,
+				"housing": self.housing.name,
+			}
+		).insert()
+
+	def _housed_batch(self, placed, capacity):
+		housing = frappe.get_doc(
+			{
+				"doctype": "Housing",
+				"housing_name": f"Test Coop {placed}-{capacity}-{frappe.generate_hash(length=6)}",
+				"housing_type": "General",
+				"capacity": capacity,
+			}
+		).insert()
+		return frappe.get_doc(
+			{
+				"doctype": "Livestock Batch",
+				"livestock_type": "Broiler",
+				"start_date": frappe.utils.today(),
+				"quantity_placed": placed,
+				"housing": housing.name,
+			}
 		).insert()
 
 	def test_create_stocking_purchase_costs_the_batch(self):
@@ -77,3 +107,40 @@ class TestStockingCost(IntegrationTestCase):
 		made = _purchase([{"item_code": "Feed 50kg", "qty": 5, "rate": 40}])
 		with self.assertRaisesRegex(frappe.exceptions.ValidationError, "has no"):
 			link_stocking_purchase(batch=self.batch_name, purchase_invoice=made["purchase_invoice"])
+
+	def test_stocking_requires_housing(self):
+		batch = frappe.get_doc(
+			{
+				"doctype": "Livestock Batch",
+				"livestock_type": "Broiler",
+				"start_date": frappe.utils.today(),
+				"quantity_placed": 500,
+			}
+		).insert()
+		with self.assertRaisesRegex(frappe.exceptions.ValidationError, "Set a Housing"):
+			create_stocking_purchase(
+				batch=batch.name, supplier=self.supplier, warehouse=self.warehouse, rate=1.0
+			)
+
+	def test_stocking_checks_capacity(self):
+		tight = self._housed_batch(placed=500, capacity=100)
+		with self.assertRaisesRegex(frappe.exceptions.ValidationError, "exceeds housing capacity"):
+			create_stocking_purchase(
+				batch=tight.name, supplier=self.supplier, warehouse=self.warehouse, rate=1.0
+			)
+		# capacity 0 means unlimited — 500 head passes
+		open_house = self._housed_batch(placed=500, capacity=0)
+		result = create_stocking_purchase(
+			batch=open_house.name, supplier=self.supplier, warehouse=self.warehouse, rate=1.0
+		)
+		self.assertEqual(
+			frappe.db.get_value("Livestock Batch", open_house.name, "stocking_purchase_invoice"),
+			result["purchase_invoice"],
+		)
+
+	def test_stocking_marks_housing_occupied(self):
+		self.assertEqual(frappe.db.get_value("Housing", self.housing.name, "status"), "Ready")
+		create_stocking_purchase(
+			batch=self.batch_name, supplier=self.supplier, warehouse=self.warehouse, rate=1.2
+		)
+		self.assertEqual(frappe.db.get_value("Housing", self.housing.name, "status"), "Occupied")
