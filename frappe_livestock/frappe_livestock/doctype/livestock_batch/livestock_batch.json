@@ -5,15 +5,22 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "placement_section",
   "livestock_type",
   "start_date",
   "quantity_placed",
   "housing",
+  "stock_sales_section",
   "status",
   "stocking_purchase_invoice",
   "sold"
  ],
  "fields": [
+  {
+   "fieldname": "placement_section",
+   "fieldtype": "Section Break",
+   "label": "Placement"
+  },
   {
    "fieldname": "livestock_type",
    "fieldtype": "Link",
@@ -25,19 +32,29 @@
    "fieldname": "start_date",
    "fieldtype": "Date",
    "label": "Start Date",
-   "reqd": 1
+   "reqd": 1,
+   "default": "Today"
   },
   {
    "fieldname": "quantity_placed",
    "fieldtype": "Int",
    "label": "Quantity Placed",
-   "reqd": 1
+   "reqd": 1,
+   "set_only_once": 1,
+   "description": "Head count placed on start date, before mortality."
   },
   {
    "fieldname": "housing",
    "fieldtype": "Link",
    "label": "Housing",
    "options": "Housing"
+  },
+  {
+   "fieldname": "stock_sales_section",
+   "fieldtype": "Section Break",
+   "label": "Stock & Sales",
+   "collapsible": 1,
+   "collapsible_depends_on": ""
   },
   {
    "fieldname": "status",
@@ -47,16 +64,20 @@
    "default": "Active"
   },
   {
-   "fieldname": "sold",
-   "fieldtype": "Int",
-   "label": "Sold",
-   "default": "0"
-  },
-  {
    "fieldname": "stocking_purchase_invoice",
    "fieldtype": "Link",
    "label": "Stocking Purchase Invoice",
-   "options": "Purchase Invoice"
+   "options": "Purchase Invoice",
+   "description": "Leave empty and use Buy stock, or link an already-submitted stocking invoice.",
+   "no_copy": 1
+  },
+  {
+   "fieldname": "sold",
+   "fieldtype": "Int",
+   "label": "Sold",
+   "default": 0,
+   "read_only": 1,
+   "no_copy": 1
   }
  ],
  "index_web_pages_for_search": 1,
@@ -98,8 +119,9 @@
    "role": "Livestock Operator"
   }
  ],
+ "search_fields": "livestock_type,housing,status",
  "sort_field": "start_date",
  "sort_order": "DESC",
  "states": [],
- "track_changes": 0
+ "track_changes": 1
 }

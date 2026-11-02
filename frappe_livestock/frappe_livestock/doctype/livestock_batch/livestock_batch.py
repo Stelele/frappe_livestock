@@ -7,12 +7,24 @@ from frappe_livestock.frappe_livestock.doctype.livestock_type.livestock_type imp
 
 class LivestockBatch(Document):
 	def autoname(self):
-		self.name = f"{self.livestock_type} {self.start_date}"
+		base = f"{self.livestock_type} {self.start_date}"
+		name = base
+		suffix = 2
+		while frappe.db.exists(self.doctype, name):
+			name = f"{base} {suffix}"
+			suffix += 1
+		self.name = name
 
 	def validate(self):
 		# capture the saved value before this write, so on_update can tell
 		# whether the stocking purchase link actually changed
 		self._stocking_pi_before = frappe.db.get_value(self.doctype, self.name, "stocking_purchase_invoice")
+		# `sold` is maintained automatically by the sales allocation hook
+		# (which writes via frappe.db.set_value, bypassing validate);
+		# any hand edit through insert/save is rejected.
+		old_sold = frappe.db.get_value(self.doctype, self.name, "sold")
+		if int(self.sold or 0) != int(old_sold or 0):
+			frappe.throw("Sold is maintained automatically and cannot be edited manually.")
 
 	def on_update(self):
 		# when the stocking purchase link is set (and changed), allocate that

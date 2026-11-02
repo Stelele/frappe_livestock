@@ -19,8 +19,9 @@ class TestLivestockBatch(IntegrationTestCase):
 		# IntegrationTestCase rolls back only at class teardown, so the fixed-name
 		# doc inserted by test_autoname_is_type_plus_start_date is still present
 		# when test_expected_ready_date_is_start_plus_final_stage_end runs.
-		if frappe.db.exists("Livestock Batch", "Broiler 2026-10-28"):
-			frappe.delete_doc("Livestock Batch", "Broiler 2026-10-28", force=True)
+		for name in ("Broiler 2026-10-28", "Broiler 2026-10-28 2"):
+			if frappe.db.exists("Livestock Batch", name):
+				frappe.delete_doc("Livestock Batch", name, force=True)
 
 	def _make(self, start_days_ago=0):
 		return frappe.get_doc(
@@ -42,6 +43,41 @@ class TestLivestockBatch(IntegrationTestCase):
 			}
 		).insert()
 		self.assertEqual(doc.name, "Broiler 2026-10-28")
+
+	def test_autoname_disambiguates_same_day_batches(self):
+		first = frappe.get_doc(
+			{
+				"doctype": "Livestock Batch",
+				"livestock_type": "Broiler",
+				"start_date": "2026-10-28",
+				"quantity_placed": 500,
+			}
+		).insert()
+		second = frappe.get_doc(
+			{
+				"doctype": "Livestock Batch",
+				"livestock_type": "Broiler",
+				"start_date": "2026-10-28",
+				"quantity_placed": 500,
+			}
+		).insert()
+		self.assertEqual(first.name, "Broiler 2026-10-28")
+		self.assertEqual(second.name, "Broiler 2026-10-28 2")
+
+	def test_sold_is_not_hand_editable(self):
+		batch = frappe.get_doc(
+			{
+				"doctype": "Livestock Batch",
+				"livestock_type": "Broiler",
+				"start_date": "2026-10-28",
+				"quantity_placed": 500,
+			}
+		).insert()
+		batch.sold = 3
+		with self.assertRaisesRegex(
+			frappe.exceptions.ValidationError, "maintained automatically"
+		):
+			batch.save()
 
 	def test_stage_and_age_are_computed(self):
 		doc = self._make(start_days_ago=25)  # 25 days old -> Grower
