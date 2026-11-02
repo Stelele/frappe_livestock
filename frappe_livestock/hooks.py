@@ -44,8 +44,9 @@ page_js = {"batch-dashboard": "public/js/batch_dashboard.js", "purchase-entry": 
 
 # include js in doctype views
 doctype_js = {
-	"Mortality": "public/js/mortality.js",
-	"Feed Event": "public/js/feed_event.js",
+	"Mortality": "public/js/livestock_forms.js",
+	"Feed Event": "public/js/livestock_forms.js",
+	"Livestock Weight": "public/js/livestock_forms.js",
 	"Livestock Batch": "public/js/livestock_batch.js",
 }
 # doctype_list_js = {"doctype" : "public/js/doctype_list.js"}
