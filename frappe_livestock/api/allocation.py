@@ -118,15 +118,20 @@ def split_purchase_to_batches(purchase_invoice, allocations, force=None):
 @frappe.whitelist()
 def get_active_batches():
 	"""Return non-closed batches newest first as {name, start_date, remaining} dicts."""
-	names = frappe.db.sql(
-		"select name from `tabLivestock Batch` where status != 'Closed' order by start_date desc",
-		pluck=True,
+	rows = frappe.db.sql(
+		"""
+		select b.name as name, b.start_date as start_date,
+			coalesce(b.quantity_placed, 0) - coalesce(m.dead, 0) - coalesce(b.sold, 0) as remaining
+		from `tabLivestock Batch` b
+		left join (
+			select batch, sum(qty) as dead from `tabMortality` group by batch
+		) m on m.batch = b.name
+		where b.status != 'Closed'
+		order by b.start_date desc
+		""",
+		as_dict=True,
 	)
 	return [
-		{
-			"name": name,
-			"start_date": frappe.db.get_value("Livestock Batch", name, "start_date"),
-			"remaining": frappe.get_doc("Livestock Batch", name).remaining(),
-		}
-		for name in names
+		{"name": row["name"], "start_date": row["start_date"], "remaining": int(row["remaining"] or 0)}
+		for row in rows
 	]
