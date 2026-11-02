@@ -89,7 +89,14 @@ class TestSaleAllocation(IntegrationTestCase):
 		)
 
 	def _point_broiler_at_item(self, item):
+		prior = frappe.db.get_value("Livestock Type", "Broiler", "finished_item")
 		frappe.db.set_value("Livestock Type", "Broiler", "finished_item", item)
+		def _restore():
+			try:
+				frappe.db.set_value("Livestock Type", "Broiler", "finished_item", prior)
+			except Exception:
+				pass
+		self.addCleanup(_restore)
 
 	def test_sales_increment_sold_on_oldest_ready(self):
 		older = self._ready_batch("2026-10-28")
@@ -268,23 +275,51 @@ class TestSaleAllocation(IntegrationTestCase):
 		self.assertEqual(batch.sold, 0)
 
 	def test_shortfall_msgprint_on_request_context(self):
-		import types as _types
-
 		# No Ready Broiler batch here (setUp clears the fixed names; only an
 		# Active batch exists), so the whole qty is unallocated.
 		self._active_batch("2026-10-28", placed=100)
-		# Outside a request context: shortfall reported, no exception.
-		result = allocate_sales_to_ready_batches_for_type(batch_type="Broiler", qty=10)
-		self.assertEqual(result, {"allocated": 0, "unallocated": 10})
-		# Inside a (fake) request context: the msgprint path is exercised and
-		# must not break.
-		frappe.clear_messages()
-		old_request = frappe.request
-		frappe.request = _types.SimpleNamespace()
+		# (a) With a faked request the shortfall path is EXERCISED: the
+		# msgprint must reach the message log.
+		prior = getattr(frappe.local, "request", None)
+		frappe.local.request = object()
 		try:
+			frappe.clear_messages()
 			result = allocate_sales_to_ready_batches_for_type(batch_type="Broiler", qty=10)
 		finally:
-			frappe.request = old_request
+			try:
+				if prior is None:
+					try:
+						delattr(frappe.local, "request")
+					except AttributeError:
+						frappe.local.request = None
+				else:
+					frappe.local.request = prior
+			except Exception:
+				pass
 		self.assertEqual(result, {"allocated": 0, "unallocated": 10})
 		logged = " ".join(str(m.get("message", "")) for m in frappe.get_message_log())
 		self.assertIn("were allocated to NO batch", logged)
+		# (b) With NO request the message log must stay clean.
+		prior = getattr(frappe.local, "request", None)
+		had_attr = hasattr(frappe.local, "request")
+		try:
+			try:
+				delattr(frappe.local, "request")
+			except AttributeError:
+				frappe.local.request = None
+			frappe.clear_messages()
+			result = allocate_sales_to_ready_batches_for_type(batch_type="Broiler", qty=10)
+		finally:
+			try:
+				if had_attr:
+					frappe.local.request = prior
+				else:
+					try:
+						delattr(frappe.local, "request")
+					except AttributeError:
+						pass
+			except Exception:
+				pass
+		self.assertEqual(result, {"allocated": 0, "unallocated": 10})
+		logged = " ".join(str(m.get("message", "")) for m in frappe.get_message_log())
+		self.assertNotIn("were allocated to NO batch", logged)
