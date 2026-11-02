@@ -132,7 +132,6 @@ class TestRoles(IntegrationTestCase):
 					"doctype": "Feed Event",
 					"batch": self.batch_name,
 					"feed_item": "Layer Feed 50kg",
-					"event": "Open",
 					"date": "2026-09-02",
 					"qty": 5,
 				}
@@ -162,7 +161,6 @@ class TestRoles(IntegrationTestCase):
 				"doctype": "Feed Event",
 				"batch": self.batch_name,
 				"feed_item": "Layer Feed 50kg",
-				"event": "Finish",
 				"date": "2026-09-04",
 				"qty": 1,
 			}
