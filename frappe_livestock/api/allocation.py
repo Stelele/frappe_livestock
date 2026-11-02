@@ -1,4 +1,5 @@
 import frappe
+from frappe.utils import flt
 
 
 def _invoice_rates(purchase_invoice):
@@ -11,17 +12,22 @@ def _invoice_rates(purchase_invoice):
 
 
 def _row_key(row):
-	"""Identity of a Batch Cost row for overwrite comparison."""
+	"""Identity of a Batch Cost row for overwrite comparison.
+
+	Amount is deliberately excluded: freshly computed float amounts
+	(e.g. rate 1.2 x qty 3 = 3.5999999999999996) never equal the
+	DB-decimal rounded value (3.6), so including amount makes identical
+	re-runs look "different". Identity = (item_code, batch, qty).
+	"""
 	if isinstance(row, dict):
-		item_code, batch, qty, amount = (
+		item_code, batch, qty = (
 			row.get("item_code"),
 			row.get("batch"),
 			row.get("qty"),
-			row.get("amount"),
 		)
 	else:
-		item_code, batch, qty, amount = row.item_code, row.batch, row.qty, row.amount
-	return (item_code, batch, float(qty or 0), float(amount or 0))
+		item_code, batch, qty = row.item_code, row.batch, row.qty
+	return (item_code, batch, flt(qty))
 
 
 @frappe.whitelist()
@@ -37,7 +43,10 @@ def split_purchase_to_batches(purchase_invoice, allocations, force=None):
 	"""
 	allocations = frappe.parse_json(allocations) or []
 	if isinstance(force, str):
-		force = frappe.parse_json(force) if force.strip() else None
+		try:
+			force = frappe.parse_json(force) if force.strip() else None
+		except Exception:
+			frappe.throw("force must be a boolean")
 	if not purchase_invoice:
 		frappe.throw("purchase_invoice is required")
 	if not allocations or not isinstance(allocations, list):
@@ -76,8 +85,8 @@ def split_purchase_to_batches(purchase_invoice, allocations, force=None):
 				frappe.throw(
 					f"Batch Cost {doc.name} already exists with different rows. Confirm overwrite to proceed."
 				)
-			old_total = sum(key[3] for key in old_keys)
-			new_total = sum(key[3] for key in new_keys)
+			old_total = flt(sum(flt((row.amount if hasattr(row, 'amount') else row.get('amount')) or 0) for row in doc.items), 2)
+			new_total = flt(sum(flt(row.get('amount') or 0) for row in rows), 2)
 			frappe.get_doc(
 				{
 					"doctype": "Comment",
