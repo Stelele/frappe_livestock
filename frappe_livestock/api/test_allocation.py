@@ -208,6 +208,73 @@ class TestSplitPurchaseToBatches(_AllocationFixture):
 		doc = frappe.get_doc("Batch Cost", costs[0].name)
 		self.assertEqual(len(doc.items), 1)
 		self.assertEqual(a.total_cost(), 200.0)
+
+	def test_split_idempotent_with_nonterminating_rate(self):
+		# rate 1.2 x qty 3 = 3.5999999999999996 in float vs 3.6 rounded in DB:
+		# identical re-runs must stay silent (no throw, no new Comment).
+		res = self._purchase(qty=6, rate=1.2)
+		pi = res["purchase_invoice"]
+		a = self._unique_batch()
+		b = self._unique_batch()
+		rows = [
+			{"item_code": "Feed", "qty": 3, "batch": a.name},
+			{"item_code": "Feed", "qty": 3, "batch": b.name},
+		]
+		split_purchase_to_batches(pi, rows)
+		costs = frappe.get_all("Batch Cost", {"purchase_invoice": pi})
+		self.assertEqual(len(costs), 1)
+		before = frappe.get_all(
+			"Comment", {"reference_doctype": "Batch Cost", "reference_name": costs[0].name}
+		)
+		# genuinely identical re-run: must NOT throw "Confirm overwrite"
+		split_purchase_to_batches(pi, rows)
+		after = frappe.get_all(
+			"Comment", {"reference_doctype": "Batch Cost", "reference_name": costs[0].name}
+		)
+		self.assertEqual(len(after) - len(before), 0)
+		costs = frappe.get_all("Batch Cost", {"purchase_invoice": pi})
+		self.assertEqual(len(costs), 1)
+
+	def test_split_reordered_rows_are_idempotent(self):
+		res = self._purchase(qty=20, rate=10)
+		pi = res["purchase_invoice"]
+		a = self._unique_batch()
+		b = self._unique_batch()
+		split_purchase_to_batches(
+			pi,
+			[
+				{"item_code": "Feed", "qty": 8, "batch": a.name},
+				{"item_code": "Feed", "qty": 12, "batch": b.name},
+			],
+		)
+		costs = frappe.get_all("Batch Cost", {"purchase_invoice": pi})
+		self.assertEqual(len(costs), 1)
+		before = frappe.get_all(
+			"Comment", {"reference_doctype": "Batch Cost", "reference_name": costs[0].name}
+		)
+		# same rows in different order: silent idempotent, no throw, no Comment
+		split_purchase_to_batches(
+			pi,
+			[
+				{"item_code": "Feed", "qty": 12, "batch": b.name},
+				{"item_code": "Feed", "qty": 8, "batch": a.name},
+			],
+		)
+		after = frappe.get_all(
+			"Comment", {"reference_doctype": "Batch Cost", "reference_name": costs[0].name}
+		)
+		self.assertEqual(len(after) - len(before), 0)
+		costs = frappe.get_all("Batch Cost", {"purchase_invoice": pi})
+		self.assertEqual(len(costs), 1)
+
+	def test_split_malformed_force_string_throws(self):
+		res = self._purchase(qty=20, rate=10)
+		pi = res["purchase_invoice"]
+		a = self._unique_batch()
+		with self.assertRaisesRegex(frappe.exceptions.ValidationError, "force must be a boolean"):
+			split_purchase_to_batches(
+				pi, [{"item_code": "Feed", "qty": 20, "batch": a.name}], force="{not-json"
+			)
 		self.assertEqual(b.total_cost(), 0.0)
 
 	def test_split_throws_for_item_not_on_invoice(self):
@@ -245,8 +312,17 @@ class TestSplitPurchaseToBatches(_AllocationFixture):
 			{"item_code": "Feed", "qty": 12, "batch": b.name},
 		]
 		split_purchase_to_batches(pi, first)
-		# same rows upsert silently (idempotent)
+		# same rows upsert silently (idempotent) with NO new Comment
+		costs = frappe.get_all("Batch Cost", {"purchase_invoice": pi})
+		self.assertEqual(len(costs), 1)
+		idle_before = frappe.get_all(
+			"Comment", {"reference_doctype": "Batch Cost", "reference_name": costs[0].name}
+		)
 		split_purchase_to_batches(pi, first)
+		idle_after = frappe.get_all(
+			"Comment", {"reference_doctype": "Batch Cost", "reference_name": costs[0].name}
+		)
+		self.assertEqual(len(idle_after) - len(idle_before), 0)
 		costs = frappe.get_all("Batch Cost", {"purchase_invoice": pi})
 		self.assertEqual(len(costs), 1)
 		# different rows without force are rejected
@@ -264,3 +340,70 @@ class TestSplitPurchaseToBatches(_AllocationFixture):
 		doc = frappe.get_doc("Batch Cost", costs[0].name)
 		self.assertEqual(len(doc.items), 1)
 		self.assertEqual(a.total_cost(), 200.0)
+
+	def test_split_idempotent_with_nonterminating_rate(self):
+		# rate 1.2 x qty 3 = 3.5999999999999996 in float vs 3.6 rounded in DB:
+		# identical re-runs must stay silent (no throw, no new Comment).
+		res = self._purchase(qty=6, rate=1.2)
+		pi = res["purchase_invoice"]
+		a = self._unique_batch()
+		b = self._unique_batch()
+		rows = [
+			{"item_code": "Feed", "qty": 3, "batch": a.name},
+			{"item_code": "Feed", "qty": 3, "batch": b.name},
+		]
+		split_purchase_to_batches(pi, rows)
+		costs = frappe.get_all("Batch Cost", {"purchase_invoice": pi})
+		self.assertEqual(len(costs), 1)
+		before = frappe.get_all(
+			"Comment", {"reference_doctype": "Batch Cost", "reference_name": costs[0].name}
+		)
+		# genuinely identical re-run: must NOT throw "Confirm overwrite"
+		split_purchase_to_batches(pi, rows)
+		after = frappe.get_all(
+			"Comment", {"reference_doctype": "Batch Cost", "reference_name": costs[0].name}
+		)
+		self.assertEqual(len(after) - len(before), 0)
+		costs = frappe.get_all("Batch Cost", {"purchase_invoice": pi})
+		self.assertEqual(len(costs), 1)
+
+	def test_split_reordered_rows_are_idempotent(self):
+		res = self._purchase(qty=20, rate=10)
+		pi = res["purchase_invoice"]
+		a = self._unique_batch()
+		b = self._unique_batch()
+		split_purchase_to_batches(
+			pi,
+			[
+				{"item_code": "Feed", "qty": 8, "batch": a.name},
+				{"item_code": "Feed", "qty": 12, "batch": b.name},
+			],
+		)
+		costs = frappe.get_all("Batch Cost", {"purchase_invoice": pi})
+		self.assertEqual(len(costs), 1)
+		before = frappe.get_all(
+			"Comment", {"reference_doctype": "Batch Cost", "reference_name": costs[0].name}
+		)
+		# same rows in different order: silent idempotent, no throw, no Comment
+		split_purchase_to_batches(
+			pi,
+			[
+				{"item_code": "Feed", "qty": 12, "batch": b.name},
+				{"item_code": "Feed", "qty": 8, "batch": a.name},
+			],
+		)
+		after = frappe.get_all(
+			"Comment", {"reference_doctype": "Batch Cost", "reference_name": costs[0].name}
+		)
+		self.assertEqual(len(after) - len(before), 0)
+		costs = frappe.get_all("Batch Cost", {"purchase_invoice": pi})
+		self.assertEqual(len(costs), 1)
+
+	def test_split_malformed_force_string_throws(self):
+		res = self._purchase(qty=20, rate=10)
+		pi = res["purchase_invoice"]
+		a = self._unique_batch()
+		with self.assertRaisesRegex(frappe.exceptions.ValidationError, "force must be a boolean"):
+			split_purchase_to_batches(
+				pi, [{"item_code": "Feed", "qty": 20, "batch": a.name}], force="{not-json"
+			)
