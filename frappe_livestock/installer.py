@@ -3,6 +3,8 @@ from __future__ import annotations
 import frappe
 
 LIVESTOCK_DASHBOARD_ROLE = "Livestock Dashboard"
+LIVESTOCK_MANAGER_ROLE = "Livestock Manager"
+LIVESTOCK_OPERATOR_ROLE = "Livestock Operator"
 
 # Read-only access the dashboard consumers (erpnext-dashboard, holdings app)
 # need. Granted via frappe.permissions.add_permission / update_permission_property,
@@ -43,6 +45,7 @@ REPORTING_PERMISSIONS = {
 
 def after_install():
 	ensure_reporting_permissions()
+	ensure_livestock_roles()
 
 
 def before_install():
@@ -64,6 +67,7 @@ def before_install():
 def after_migrate():
 	"""Keep the dashboard role's permissions in sync on every migrate (idempotent)."""
 	ensure_reporting_permissions()
+	ensure_livestock_roles()
 
 
 def ensure_reporting_permissions():
@@ -90,3 +94,60 @@ def ensure_reporting_permissions():
 				update_permission_property(doctype, LIVESTOCK_DASHBOARD_ROLE, 0, ptype, 1)
 
 	frappe.db.commit()
+
+
+def ensure_livestock_roles():
+	"""Create the Livestock Manager and Livestock Operator roles if missing,
+	and grant their permission booleans (idempotent).
+
+	Mirrors the permissions arrays in each doctype's JSON. The booleans must
+	be written here via add_permission / update_permission_property — not
+	just in JSON — because every livestock doctype already carries Custom
+	DocPerm rows (for the Livestock Dashboard role), and once any Custom
+	DocPerm exists Frappe's Meta.set_custom_permissions ignores the JSON
+	standard perms at runtime. Nothing is fixture-synced as Custom DocPerm.
+	"""
+	from frappe.permissions import add_permission, update_permission_property
+
+	for role in (LIVESTOCK_MANAGER_ROLE, LIVESTOCK_OPERATOR_ROLE):
+		if not frappe.db.exists("Role", role):
+			frappe.get_doc(
+				{"doctype": "Role", "role_name": role, "desk_access": 1, "is_custom": 1}
+			).insert(ignore_permissions=True)
+
+	full = ("create", "delete", "email", "export", "print", "read", "report", "share", "write")
+	for doctype in (
+		"Livestock Type",
+		"Livestock Batch",
+		"Feed Event",
+		"Mortality",
+		"Batch Cost",
+		"Batch Sale",
+		"Housing",
+	):
+		_ensure_role_ptypes(doctype, LIVESTOCK_MANAGER_ROLE, full, add_permission, update_permission_property)
+	for doctype in ("Livestock Stage", "Housing Region", "Batch Cost Item", "Batch Sale Item"):
+		_ensure_role_ptypes(doctype, LIVESTOCK_MANAGER_ROLE, ("read",), add_permission, update_permission_property)
+	for doctype in ("Feed Event", "Mortality"):
+		_ensure_role_ptypes(
+			doctype, LIVESTOCK_OPERATOR_ROLE, ("create", "read", "report", "write"), add_permission, update_permission_property
+		)
+	for doctype in ("Livestock Batch", "Livestock Type", "Housing"):
+		_ensure_role_ptypes(doctype, LIVESTOCK_OPERATOR_ROLE, ("read",), add_permission, update_permission_property)
+
+	frappe.db.commit()
+
+
+def _ensure_role_ptypes(doctype, role, ptypes, add_permission, update_permission_property):
+	"""Grant one role's ptypes on one doctype without clobbering other roles."""
+	for ptype in ptypes:
+		existing = frappe.db.get_value(
+			"Custom DocPerm",
+			{"parent": doctype, "role": role, "permlevel": 0},
+			"name",
+		)
+		if not existing:
+			add_permission(doctype, role, ptype=ptype)
+			continue
+		if not frappe.db.get_value("Custom DocPerm", existing, ptype):
+			update_permission_property(doctype, role, 0, ptype, 1)
