@@ -293,6 +293,18 @@ class TestSplitPurchaseToBatches(_AllocationFixture):
 		self.assertLess(names.index(newer.name), names.index(older.name))
 		self.assertEqual(batches[names.index(newer.name)]["remaining"], 500)
 
+	def test_get_active_batches_remaining_matches_controller(self):
+		batch = self._batch("2026-10-28", placed=500)
+		frappe.get_doc({"doctype": "Mortality", "batch": batch.name, "qty": 10}).insert()
+		frappe.db.set_value("Livestock Batch", batch.name, "sold", 5)
+		expected = frappe.get_doc("Livestock Batch", batch.name).remaining()
+		self.assertEqual(expected, 485)
+		rows = get_active_batches()
+		row = next(r for r in rows if r["name"] == batch.name)
+		self.assertEqual(set(row.keys()), {"name", "start_date", "remaining"})
+		self.assertEqual(row["remaining"], expected)
+		self.assertEqual(row["remaining"], 485)
+
 	def test_split_rejects_closed_batch(self):
 		res = self._purchase(qty=20, rate=10)
 		a = self._unique_batch()
