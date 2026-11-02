@@ -165,9 +165,11 @@ doc_events = {
 # 	"all": [
 # 		"frappe_livestock.tasks.all"
 # 	],
-# 	"daily": [
-# 		"frappe_livestock.tasks.daily"
-# 	],
+scheduler_events = {
+	"daily": [
+		"frappe_livestock.tasks.daily"
+	],
+}
 # 	"hourly": [
 # 		"frappe_livestock.tasks.hourly"
 # 	],
