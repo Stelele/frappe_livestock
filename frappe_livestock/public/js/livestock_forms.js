@@ -1,11 +1,4 @@
-// Shared form defaults for Feed Event, Mortality and Livestock Weight.
-// This one file is injected via doctype_js on all three doctypes; each
-// handler block below only fires for its own doctype, so the
-// shared registration is safe (confirmed in frappe/desk/form/meta.py:
-// Meta.add_code_via_hook("doctype_js", "__js") appends the file content to
-// the form page's scripts, and ScriptManager dispatches handlers by
-// doctype name).
-
+// Shared form handlers, registered once per session by the global guard below.
 function livestock_default_batch(frm, after_batch) {
 	if (!frm.is_new() || frm.doc.batch) {
 		return;
@@ -75,26 +68,29 @@ function livestock_set_batch_query(frm) {
 	frm.set_query("batch", () => ({ filters: [["status", "!=", "Closed"]] }));
 }
 
-frappe.ui.form.on("Feed Event", {
-	onload(frm) {
-		livestock_set_batch_query(frm);
-		livestock_default_batch(frm, livestock_prefill_feed_item);
-	},
-	batch(frm) {
-		livestock_prefill_feed_item(frm);
-	},
-});
+if (!window.__livestock_forms_registered) {
+	window.__livestock_forms_registered = true;
+	frappe.ui.form.on("Feed Event", {
+		onload(frm) {
+			livestock_set_batch_query(frm);
+			livestock_default_batch(frm, livestock_prefill_feed_item);
+		},
+		batch(frm) {
+			livestock_prefill_feed_item(frm);
+		},
+	});
 
-frappe.ui.form.on("Mortality", {
-	onload(frm) {
-		livestock_set_batch_query(frm);
-		livestock_default_batch(frm);
-	},
-});
+	frappe.ui.form.on("Mortality", {
+		onload(frm) {
+			livestock_set_batch_query(frm);
+			livestock_default_batch(frm);
+		},
+	});
 
-frappe.ui.form.on("Livestock Weight", {
-	onload(frm) {
-		livestock_set_batch_query(frm);
-		livestock_default_batch(frm);
-	},
-});
+	frappe.ui.form.on("Livestock Weight", {
+		onload(frm) {
+			livestock_set_batch_query(frm);
+			livestock_default_batch(frm);
+		},
+	});
+}

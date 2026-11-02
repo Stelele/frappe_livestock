@@ -5,7 +5,7 @@ frappe.ui.form.on("Livestock Batch", {
 	refresh(frm) {
 		if (frm.is_new()) {
 			frm.set_intro(
-				__("Buy day-old stock with 'Buy stock', or link a submitted stocking Purchase Invoice to set this batch's initial cost.")
+				__("Buy day-old stock with Buy stock, or link an already-submitted stocking Purchase Invoice to set this batch's initial cost.")
 			);
 			return;
 		}
@@ -50,14 +50,13 @@ function show_buy_dialog(frm) {
 			get_query: { filters: [["is_group", "=", 0], ["company", "=", company]] },
 		},
 		{ fieldname: "rate", label: __("Rate per head"), fieldtype: "Currency", reqd: 1 },
-		{ fieldname: "invoice_date", label: __("Invoice date"), fieldtype: "Date", default: "Today" },
+		{ fieldname: "invoice_date", label: __("Invoice date"), fieldtype: "Date" },
 		{
 			fieldname: "mode_of_payment",
 			label: __("Mode of payment"),
 			fieldtype: "Link",
 			options: "Mode of Payment",
 			reqd: 1,
-			default: "Cash",
 		},
 		{ fieldname: "invoice_number", label: __("Supplier invoice no."), fieldtype: "Data" },
 	]);
@@ -99,6 +98,9 @@ function show_buy_dialog(frm) {
 		},
 	});
 	dialog.show();
+	// v16 FieldGroup.get_values() only applies df.default with include_default,
+	// so dialog defaults are applied explicitly via set_value below.
+	dialog.set_value("invoice_date", frappe.datetime.get_today());
 	// Dialog defaults come from get_purchase_context resolved when the dialog
 	// opens (not cached at page load), so a changed user default applies.
 	frappe
@@ -120,16 +122,31 @@ function show_buy_dialog(frm) {
 			}
 		})
 		.fail(() => {
-			// Intentionally silent: dialog defaults stay hand-filled.
+			frappe.msgprint({
+				message: __("Purchase defaults could not load; the dialog is still usable, pick values manually."),
+				indicator: "orange",
+			});
 		});
 }
 
 function set_buy_busy(dialog, on) {
-	var btns =
-		typeof dialog.get_primary_btn === "function"
-			? dialog.get_primary_btn()
-			: dialog.$wrapper.find(".btn-primary");
-	btns.prop("disabled", on);
+	if (
+		typeof dialog.disable_primary_action === "function" &&
+		typeof dialog.enable_primary_action === "function"
+	) {
+		if (on) {
+			dialog.disable_primary_action();
+		} else {
+			dialog.enable_primary_action();
+		}
+	} else {
+		var btns =
+			typeof dialog.get_primary_btn === "function"
+				? dialog.get_primary_btn()
+				: dialog.$wrapper.find(".btn-primary");
+		btns.prop("disabled", on);
+		btns.toggleClass("disabled", on);
+	}
 	if (on) {
 		frappe.freeze(__("Buying stock…"));
 	} else {
