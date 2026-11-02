@@ -200,7 +200,9 @@ class TestSplitPurchaseToBatches(_AllocationFixture):
 				{"item_code": "Feed", "qty": 12, "batch": b.name},
 			],
 		)
-		split_purchase_to_batches(res["purchase_invoice"], [{"item_code": "Feed", "qty": 20, "batch": a.name}])
+		split_purchase_to_batches(
+			res["purchase_invoice"], [{"item_code": "Feed", "qty": 20, "batch": a.name}], force=1
+		)
 		costs = frappe.get_all("Batch Cost", {"purchase_invoice": res["purchase_invoice"]})
 		self.assertEqual(len(costs), 1)
 		doc = frappe.get_doc("Batch Cost", costs[0].name)
@@ -223,3 +225,42 @@ class TestSplitPurchaseToBatches(_AllocationFixture):
 		self.assertNotIn(closed.name, names)
 		self.assertLess(names.index(newer.name), names.index(older.name))
 		self.assertEqual(batches[names.index(newer.name)]["remaining"], 500)
+
+	def test_split_rejects_closed_batch(self):
+		res = self._purchase(qty=20, rate=10)
+		a = self._unique_batch()
+		frappe.db.set_value("Livestock Batch", a.name, "status", "Closed")
+		with self.assertRaisesRegex(frappe.exceptions.ValidationError, "is closed"):
+			split_purchase_to_batches(
+				res["purchase_invoice"], [{"item_code": "Feed", "qty": 5, "batch": a.name}]
+			)
+
+	def test_split_requires_force_for_conflicting_overwrite(self):
+		res = self._purchase(qty=20, rate=10)
+		pi = res["purchase_invoice"]
+		a = self._unique_batch()
+		b = self._unique_batch()
+		first = [
+			{"item_code": "Feed", "qty": 8, "batch": a.name},
+			{"item_code": "Feed", "qty": 12, "batch": b.name},
+		]
+		split_purchase_to_batches(pi, first)
+		# same rows upsert silently (idempotent)
+		split_purchase_to_batches(pi, first)
+		costs = frappe.get_all("Batch Cost", {"purchase_invoice": pi})
+		self.assertEqual(len(costs), 1)
+		# different rows without force are rejected
+		with self.assertRaisesRegex(frappe.exceptions.ValidationError, "Confirm overwrite"):
+			split_purchase_to_batches(pi, [{"item_code": "Feed", "qty": 20, "batch": a.name}])
+		# different rows with force overwrite and leave exactly one new Comment
+		before = frappe.get_all(
+			"Comment", {"reference_doctype": "Batch Cost", "reference_name": costs[0].name}
+		)
+		split_purchase_to_batches(pi, [{"item_code": "Feed", "qty": 20, "batch": a.name}], force=1)
+		after = frappe.get_all(
+			"Comment", {"reference_doctype": "Batch Cost", "reference_name": costs[0].name}
+		)
+		self.assertEqual(len(after) - len(before), 1)
+		doc = frappe.get_doc("Batch Cost", costs[0].name)
+		self.assertEqual(len(doc.items), 1)
+		self.assertEqual(a.total_cost(), 200.0)

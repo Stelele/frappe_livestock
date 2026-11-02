@@ -52,8 +52,18 @@ class TestReporting(IntegrationTestCase):
 		frappe.db.delete("Batch Sale Item", {"batch": "Broiler 2026-08-15"})
 		frappe.db.delete("Livestock Batch", {"name": "Broiler 2026-08-15"})
 
+		if not frappe.db.exists("Housing", "Reporting Coop"):
+			frappe.get_doc(
+				{"doctype": "Housing", "housing_name": "Reporting Coop", "housing_type": "General", "capacity": 1000}
+			).insert()
 		cls.batch = frappe.get_doc(
-			{"doctype": "Livestock Batch", "livestock_type": "Broiler", "start_date": "2026-08-15", "quantity_placed": 500}
+			{
+				"doctype": "Livestock Batch",
+				"livestock_type": "Broiler",
+				"start_date": "2026-08-15",
+				"quantity_placed": 500,
+				"housing": "Reporting Coop",
+			}
 		).insert()
 		cls.batch_name = cls.batch.name
 

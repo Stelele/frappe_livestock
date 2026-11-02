@@ -10,16 +10,34 @@ def _invoice_rates(purchase_invoice):
 	return {row["item_code"]: float(row["rate"] or 0) for row in rows}
 
 
+def _row_key(row):
+	"""Identity of a Batch Cost row for overwrite comparison."""
+	if isinstance(row, dict):
+		item_code, batch, qty, amount = (
+			row.get("item_code"),
+			row.get("batch"),
+			row.get("qty"),
+			row.get("amount"),
+		)
+	else:
+		item_code, batch, qty, amount = row.item_code, row.batch, row.qty, row.amount
+	return (item_code, batch, float(qty or 0), float(amount or 0))
+
+
 @frappe.whitelist()
-def split_purchase_to_batches(purchase_invoice, allocations):
-	"""Split a purchase's lines across batches (JSON-encoded allocations over HTTP)."""
-	allocations = frappe.parse_json(allocations) or []
+def split_purchase_to_batches(purchase_invoice, allocations, force=None):
 	"""Split a bulk purchase invoice across batches, deriving amount from PI line rates.
 
 	args:
 	        purchase_invoice: Name of the source Purchase Invoice
-	        allocations: List of {item_code, qty, batch} dicts
+	        allocations: List of {item_code, qty, batch} dicts (JSON-encoded when called over HTTP)
+	        force: Overwrite an existing Batch Cost only when its stored rows differ
+	                AND this is truthy (JSON-parsed bool). Identical rows upsert
+	                silently (idempotent); a forced overwrite leaves an audit Comment.
 	"""
+	allocations = frappe.parse_json(allocations) or []
+	if isinstance(force, str):
+		force = frappe.parse_json(force) if force.strip() else None
 	if not purchase_invoice:
 		frappe.throw("purchase_invoice is required")
 	if not allocations or not isinstance(allocations, list):
@@ -37,6 +55,8 @@ def split_purchase_to_batches(purchase_invoice, allocations):
 			frappe.throw(f"qty must be greater than 0 for item '{item_code}'")
 		if not batch or not frappe.db.exists("Livestock Batch", batch):
 			frappe.throw(f"Livestock Batch '{batch}' does not exist")
+		if frappe.db.get_value("Livestock Batch", batch, "status") == "Closed":
+			frappe.throw(f"Batch {batch} is closed")
 		rows.append(
 			{
 				"item_code": item_code,
@@ -49,6 +69,27 @@ def split_purchase_to_batches(purchase_invoice, allocations):
 	existing = frappe.db.exists("Batch Cost", {"purchase_invoice": purchase_invoice})
 	if existing:
 		doc = frappe.get_doc("Batch Cost", existing)
+		old_keys = sorted(_row_key(row) for row in doc.items)
+		new_keys = sorted(_row_key(row) for row in rows)
+		if old_keys != new_keys:
+			if not force:
+				frappe.throw(
+					f"Batch Cost {doc.name} already exists with different rows. Confirm overwrite to proceed."
+				)
+			old_total = sum(key[3] for key in old_keys)
+			new_total = sum(key[3] for key in new_keys)
+			frappe.get_doc(
+				{
+					"doctype": "Comment",
+					"comment_type": "Comment",
+					"reference_doctype": "Batch Cost",
+					"reference_name": doc.name,
+					"content": (
+						f"Rows replaced: {len(old_keys)} rows ({old_total} amount) → "
+						f"{len(new_keys)} rows ({new_total} amount) by {frappe.session.user}"
+					),
+				}
+			).insert()
 		doc.set("items", [])
 		for row in rows:
 			doc.append("items", row)
