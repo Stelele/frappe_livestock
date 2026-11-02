@@ -11,15 +11,13 @@ app_license = "mit"
 required_apps = ["erpnext"]
 
 # Each item in the list will be shown as an app in the apps page
-# add_to_apps_screen = [
-# 	{
-# 		"name": "frappe_livestock",
-# 		"logo": "/assets/frappe_livestock/logo.png",
-# 		"title": "Frappe Livestock",
-# 		"route": "/frappe_livestock",
-# 		"has_permission": "frappe_livestock.api.permission.has_app_permission"
-# 	}
-# ]
+add_to_apps_screen = [
+	{
+		"name": "frappe_livestock",
+		"title": "Frappe Livestock",
+		"route": "/app/batch-dashboard"
+	}
+]
 
 # Includes in <head>
 # ------------------
