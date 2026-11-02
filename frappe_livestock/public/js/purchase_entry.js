@@ -60,21 +60,26 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 		return fg;
 	}
 	function collect(fgs, need) {
-		var out = [];
+		var out = [], incomplete = false;
 		fgs.forEach(function (fg) {
 			var v = fg.get_values();
-			if (!v || !v.item_code || (need && !v[need])) return;
+			if (!v || !v.item_code || !v.qty || (need && !v[need])) { incomplete = true; return; }
 			out.push(v);
 		});
-		return out;
+		return { rows: out, incomplete: incomplete };
+	}
+	function incomplete_msg() {
+		frappe.msgprint({ message: __("Some rows are incomplete — fill every item, batch and qty row or remove it."), indicator: "orange" });
 	}
 	function finish_create() { creating = false; create_btn.prop("disabled", false); frappe.unfreeze(); }
 	function on_create() {
 		if (creating) return;
 		var values = purchase_head.get_values();
 		if (!values) return;
-		var items = collect(item_rows).map(function (v) { return { item_code: v.item_code, qty: v.qty, rate: v.rate }; });
-		if (!items.length) { frappe.msgprint(__("Enter at least one item.")); return; }
+		var items = collect(item_rows);
+		if (items.incomplete) { incomplete_msg(); return; }
+		var payload = items.rows.map(function (v) { return { item_code: v.item_code, qty: v.qty, rate: v.rate }; });
+		if (!payload.length) { frappe.msgprint(__("Enter at least one item.")); return; }
 		creating = true;
 		create_btn.prop("disabled", true);
 		frappe.freeze(__("Creating purchase…"));
@@ -82,7 +87,7 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 			.then(function (r) {
 				var c = r.message || {};
 				return frappe.call("frappe_livestock.api.purchase.create_full_purchase", {
-					company: c.company, supplier: values.supplier, warehouse: values.warehouse, items: items,
+					company: c.company, supplier: values.supplier, warehouse: values.warehouse, items: payload,
 					invoice_number: values.invoice_number, invoice_date: values.invoice_date, mode_of_payment: values.mode_of_payment,
 				});
 			})
@@ -118,11 +123,15 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 		if (!invoice) { frappe.msgprint(__("Pick a purchase invoice first.")); return; }
 		frappe.db.get_doc("Purchase Invoice", invoice).then(function (doc) {
 			if (!doc || !doc.items || !doc.items.length) { frappe.msgprint(__("No item lines on this invoice.")); return; }
+			// Intentionally silent on failure: allocate rows stay empty and the
+			// user can add them by hand via "Add row (allocate)".
 			frappe.call("frappe_livestock.api.allocation.get_active_batches").then(function (r) {
 				var batches = r.message || [], single = batches.length === 1 ? batches[0].name : null;
 				clear_alloc_rows();
 				doc.items.forEach(function (line) { add_alloc_row({ item_code: line.item_code, qty: line.qty, batch: single }); });
 			});
+		}).fail(function () {
+			frappe.msgprint({ message: __("Could not load invoice lines."), indicator: "orange" });
 		});
 	}
 	function is_overwrite_error(err) {
@@ -140,7 +149,7 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 			finish_allocate();
 		}).fail(function (err) {
 			if (!force && is_overwrite_error(err)) {
-				frappe.confirm(`Overwrite existing Batch Cost for ${invoice} with these rows?`,
+				frappe.confirm(__("Overwrite existing Batch Cost for {0} with these rows?", [frappe.utils.escape_html(invoice)]),
 					function () { submit_allocations(invoice, allocations, 1); }, finish_allocate);
 			} else finish_allocate();
 		});
@@ -149,16 +158,19 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 		if (allocating) return;
 		var invoice = allocate_head.fields_dict.purchase_invoice.get_value();
 		if (!invoice) { frappe.msgprint(__("Pick a purchase invoice first.")); return; }
-		var allocations = collect(allocate_rows, "batch").map(function (v) { return { item_code: v.item_code, batch: v.batch, qty: v.qty }; });
-		if (!allocations.length) { frappe.msgprint(__("Fill at least one row: item, batch and qty.")); return; }
+		var allocations = collect(allocate_rows, "batch");
+		if (allocations.incomplete) { incomplete_msg(); return; }
+		var payload = allocations.rows.map(function (v) { return { item_code: v.item_code, batch: v.batch, qty: v.qty }; });
+		if (!payload.length) { frappe.msgprint(__("Fill at least one row: item, batch and qty.")); return; }
 		allocating = true;
 		alloc_btn.prop("disabled", true);
 		frappe.freeze(__("Allocating purchase…"));
-		submit_allocations(invoice, allocations, 0);
+		submit_allocations(invoice, payload, 0);
 	}
 	// Buttons + per-visit context
 	var create_btn = $(page.set_primary_action(__("Create purchase"), on_create));
 	page.add_inner_button(__("Add row"), add_item_row);
+	page.add_inner_button(__("Add row (allocate)"), add_alloc_row);
 	page.add_inner_button(__("Load invoice lines"), function () {
 		load_invoice_lines(allocate_head.fields_dict.purchase_invoice.get_value());
 	});
@@ -172,5 +184,7 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 		if ((ctx.warnings || []).length) {
 			frappe.msgprint({ title: __("Setup warnings"), message: "<ul><li>" + ctx.warnings.join("</li><li>") + "</li></ul>", indicator: "orange" });
 		}
+	}).fail(function () {
+		frappe.msgprint({ message: __("Could not load purchase defaults."), indicator: "orange" });
 	});
 };
