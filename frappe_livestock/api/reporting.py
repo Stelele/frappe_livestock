@@ -4,14 +4,15 @@ holdings app). Design rules:
 - Raw rows out; bucketing/grouping/charting is the consumer's job (the owner's
   "compute presentation on the client" rule).
 - Read-mostly: nothing here mutates; capture stays in the desk/phone surfaces.
-- Every endpoint is gated to System Manager / Livestock Dashboard.
+- Every endpoint is gated to System Manager / Livestock Dashboard /
+  Livestock Manager.
 - Cost ledger = Batch Cost (allocations of purchase invoices); revenue ledger =
   Batch Sale (allocations of sales invoices, written by the on_submit hook).
 """
 
 import frappe
 
-DASHBOARD_ROLES = ("System Manager", "Livestock Dashboard")
+DASHBOARD_ROLES = ("System Manager", "Livestock Dashboard", "Livestock Manager")
 
 
 def _gate():

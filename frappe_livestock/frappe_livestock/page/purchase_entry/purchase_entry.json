@@ -12,6 +12,9 @@
  "roles": [
   {
    "role": "System Manager"
+  },
+  {
+   "role": "Livestock Manager"
   }
  ],
  "script": null,

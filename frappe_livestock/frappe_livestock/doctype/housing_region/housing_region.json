@@ -35,6 +35,10 @@
   {
    "read": 1,
    "role": "System Manager"
+  },
+  {
+   "read": 1,
+   "role": "Livestock Manager"
   }
  ],
  "sort_field": "creation",

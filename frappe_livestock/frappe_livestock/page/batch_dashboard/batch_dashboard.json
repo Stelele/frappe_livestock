@@ -12,6 +12,12 @@
  "roles": [
   {
    "role": "System Manager"
+  },
+  {
+   "role": "Livestock Dashboard"
+  },
+  {
+   "role": "Livestock Manager"
   }
  ],
  "script": null,
