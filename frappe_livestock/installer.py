@@ -65,33 +65,42 @@ def before_install():
 
 
 def after_migrate():
-	"""Keep the dashboard role's permissions in sync on every migrate (idempotent)."""
+	"""Keep the dashboard consumers' (Dashboard + Manager) permissions in sync on every migrate (idempotent)."""
 	ensure_reporting_permissions()
 	ensure_livestock_roles()
 
 
 def ensure_reporting_permissions():
-	"""Grant REPORTING_PERMISSIONS (read-only) to LIVESTOCK_DASHBOARD_ROLE without
-	clobbering other roles' access."""
+	"""Grant REPORTING_PERMISSIONS (read-only) to the dashboard consumers
+	without clobbering other roles' access.
+
+	RULING (controller, round-1 review): "Livestock Manager" is the app's
+	power role and receives the same ERPNext read surface the Livestock
+	Dashboard role already has — reporting endpoints join ERPNext core
+	doctypes (Item, plus the ledgers in REPORTING_PERMISSIONS), so Manager
+	gets the full read set too.
+	"""
 	from frappe.permissions import add_permission, update_permission_property
 
-	if not frappe.db.exists("Role", LIVESTOCK_DASHBOARD_ROLE):
-		frappe.get_doc(
-			{"doctype": "Role", "role_name": LIVESTOCK_DASHBOARD_ROLE, "desk_access": 0, "is_custom": 1}
-		).insert(ignore_permissions=True)
+	for role, desk in ((LIVESTOCK_DASHBOARD_ROLE, 0), (LIVESTOCK_MANAGER_ROLE, 1)):
+		if not frappe.db.exists("Role", role):
+			frappe.get_doc(
+				{"doctype": "Role", "role_name": role, "desk_access": desk, "is_custom": 1}
+			).insert(ignore_permissions=True)
 
-	for doctype, ptypes in REPORTING_PERMISSIONS.items():
-		for ptype in ptypes:
-			existing = frappe.db.get_value(
-				"Custom DocPerm",
-				{"parent": doctype, "role": LIVESTOCK_DASHBOARD_ROLE, "permlevel": 0},
-				"name",
-			)
-			if not existing:
-				add_permission(doctype, LIVESTOCK_DASHBOARD_ROLE, ptype=ptype)
-				continue
-			if not frappe.db.get_value("Custom DocPerm", existing, ptype):
-				update_permission_property(doctype, LIVESTOCK_DASHBOARD_ROLE, 0, ptype, 1)
+	for role in (LIVESTOCK_DASHBOARD_ROLE, LIVESTOCK_MANAGER_ROLE):
+		for doctype, ptypes in REPORTING_PERMISSIONS.items():
+			for ptype in ptypes:
+				existing = frappe.db.get_value(
+					"Custom DocPerm",
+					{"parent": doctype, "role": role, "permlevel": 0},
+					"name",
+				)
+				if not existing:
+					add_permission(doctype, role, ptype=ptype)
+					continue
+				if not frappe.db.get_value("Custom DocPerm", existing, ptype):
+					update_permission_property(doctype, role, 0, ptype, 1)
 
 	frappe.db.commit()
 
