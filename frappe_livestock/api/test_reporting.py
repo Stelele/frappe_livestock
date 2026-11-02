@@ -1,7 +1,7 @@
 import frappe
 from frappe.tests import IntegrationTestCase
 from frappe_livestock.api.stocking import create_stocking_purchase
-from frappe_livestock.api.reporting import batch_gl_entries, batch_pl, portfolio
+from frappe_livestock.api.reporting import batch_gl_entries, batch_pl, feed_timeline, portfolio
 
 
 def _ensure_item(code, group="Products"):
@@ -149,6 +149,22 @@ class TestReporting(IntegrationTestCase):
 		# date filter excludes everything when the window is in the future
 		future = batch_gl_entries(self.batch_name, from_date="2999-01-01")
 		self.assertEqual(future, [])
+
+	def test_feed_timeline_returns_plain_consumed_row(self):
+		frappe.get_doc(
+			{
+				"doctype": "Feed Event",
+				"batch": self.batch_name,
+				"feed_item": "Layer Feed 50kg",
+				"date": "2026-08-20",
+				"qty": 2,
+			}
+		).insert()
+		rows = feed_timeline(batch=self.batch_name)
+		match = [r for r in rows if str(r.get("date")) == "2026-08-20"]
+		self.assertTrue(match)
+		self.assertEqual(float(match[0]["qty"]), 2.0)
+		self.assertNotIn("event", match[0])
 
 	def test_reporting_is_role_gated(self):
 		if not frappe.db.exists("User", "nolivestock@example.com"):
