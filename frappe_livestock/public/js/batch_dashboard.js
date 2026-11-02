@@ -101,13 +101,16 @@ frappe.pages["batch-dashboard"].on_page_load = function (wrapper) {
 		return '<span class="indicator-pill ' + color + '">' + esc(status) + "</span>";
 	}
 
-	function detail_row(label, value_html) {
+	function detail_row(label, value_html, value_cls) {
 		return (
-			'<div class="row"><div class="col-sm-6 text-muted">' +
+			'<div class="d-flex justify-content-between align-items-baseline">' +
+			'<span class="text-muted text-truncate flex-grow-1">' +
 			esc(label) +
-			'</div><div class="col-sm-6"><strong>' +
+			'</span><span class="font-weight-bold text-right' +
+			(value_cls ? " " + value_cls : "") +
+			'">' +
 			value_html +
-			"</strong></div></div>"
+			"</span></div>"
 		);
 	}
 
@@ -173,18 +176,23 @@ frappe.pages["batch-dashboard"].on_page_load = function (wrapper) {
 		var right = '<div class="frappe-card"><div class="text-muted"><small>' + esc(__("Details")) + "</small></div>";
 		right += detail_row(__("Type"), dash(s.livestock_type));
 		right += detail_row(__("Start Date"), dash(s.start_date));
-		right += detail_row(__("Age (days)"), dash(s.age_days));
+		right += detail_row(__("Age"), dash(s.age_days));
 		right += detail_row(__("Stage"), dash(s.stage));
 		right += detail_row(__("Placed"), dash(s.quantity_placed));
 		right += detail_row(__("Sold"), dash(s.sold));
 		right += detail_row(__("Remaining"), dash(s.remaining));
-		right += detail_row(__("Expected Ready"), dash(s.expected_ready_date));
+		right += detail_row(__("Ready"), dash(s.expected_ready_date));
 		right += detail_row(
-			__("Latest Weight (kg)"),
+			__("Weight"),
 			s.latest_weight_kg == null ? "—" : esc(s.latest_weight_kg) + " (" + esc(s.latest_weight_date) + ")"
 		);
-		right += detail_row(__("Last Feed"), fresh(s.last_feed_date, is_active));
-		right += detail_row(__("Last Mortality"), fresh(s.last_mortality_date, is_active));
+		right += detail_row(__("Feed (last)"), fresh(s.last_feed_date, is_active));
+		right += detail_row(__("Mortality (last)"), fresh(s.last_mortality_date, is_active));
+		right += '<div class="text-muted"><small>' + esc(__("Today & P&L")) + "</small></div>";
+		right += detail_row(__("Feed Today"), dash(s.feed_consumed_today));
+		right += detail_row(__("Revenue"), esc(money(s.revenue)));
+		var profit_cls = s.profit != null && Number(s.profit) < 0 ? "text-danger" : "";
+		right += detail_row(__("Profit"), esc(money(s.profit)), profit_cls);
 		right += "</div>";
 		$right.html(right);
 	}
