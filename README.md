@@ -4,6 +4,9 @@ A simple module to make managing livestock easier
 
 ### Installation
 
+This app targets **Frappe v16 and ERPNext v16** (a `before_install` guard refuses
+other majors; ERPNext is installed automatically as a `required_apps` dependency).
+
 You can install this app using the [bench](https://github.com/frappe/bench) CLI:
 
 ```bash

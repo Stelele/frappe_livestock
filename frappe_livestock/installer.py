@@ -45,6 +45,22 @@ def after_install():
 	ensure_reporting_permissions()
 
 
+def before_install():
+	"""Refuse to install on any Frappe major this app does not target.
+
+	Everything here is built and tested against Frappe/ERPNext v16
+	(16.54.0 / 16.52.1 at time of writing); v17 changes are already
+	generating deprecation warnings in tested code paths.
+	"""
+	major = int(frappe.__version__.split(".")[0])
+	if major != 16:
+		frappe.throw(
+			frappe._(
+				"frappe_livestock supports Frappe v16 only. This site runs Frappe {0}. Install on a v16 bench."
+			).format(frappe.__version__)
+		)
+
+
 def after_migrate():
 	"""Keep the dashboard role's permissions in sync on every migrate (idempotent)."""
 	ensure_reporting_permissions()
