@@ -53,8 +53,7 @@
    "fieldname": "stock_sales_section",
    "fieldtype": "Section Break",
    "label": "Stock & Sales",
-   "collapsible": 1,
-   "collapsible_depends_on": ""
+   "collapsible": 1
   },
   {
    "fieldname": "status",
@@ -83,7 +82,7 @@
  "index_web_pages_for_search": 1,
  "istable": 0,
  "links": [],
- "modified": "2026-10-28 00:00:00.000000",
+ "modified": "2026-11-02 17:54:59.447266",
  "modified_by": "Administrator",
  "module": "Frappe Livestock",
  "name": "Livestock Batch",

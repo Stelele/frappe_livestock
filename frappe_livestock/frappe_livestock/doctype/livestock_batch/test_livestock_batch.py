@@ -5,11 +5,31 @@ from frappe.utils import add_days, today
 from frappe_livestock.frappe_livestock.doctype.livestock_type.test_livestock_type import (
 	ensure_broiler_type,
 )
+from frappe_livestock.installer import ensure_livestock_roles
 
 # Livestock Batch's links (stocking_purchase_invoice → Purchase Invoice; Livestock Type's item
 # links) pull ERPNext's test_purchase_invoice import-time bootstrap, which
 # duplicates "Standard Buying" on this site — these tests never need those records.
 IGNORE_TEST_RECORD_DEPENDENCIES = ["Item", "Purchase Invoice"]
+
+BATCH_MANAGER_EMAIL = "livestock-batch-manager@example.com"
+
+
+def _ensure_batch_manager():
+	ensure_livestock_roles()
+	if frappe.db.exists("User", BATCH_MANAGER_EMAIL):
+		user = frappe.get_doc("User", BATCH_MANAGER_EMAIL)
+		user.set("roles", [{"role": "Livestock Manager"}])
+		user.save(ignore_permissions=True)
+	else:
+		frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": BATCH_MANAGER_EMAIL,
+				"first_name": "livestock-batch-manager",
+				"roles": [{"role": "Livestock Manager"}],
+			}
+		).insert(ignore_permissions=True)
 
 
 class TestLivestockBatch(IntegrationTestCase):
@@ -19,7 +39,7 @@ class TestLivestockBatch(IntegrationTestCase):
 		# IntegrationTestCase rolls back only at class teardown, so the fixed-name
 		# doc inserted by test_autoname_is_type_plus_start_date is still present
 		# when test_expected_ready_date_is_start_plus_final_stage_end runs.
-		for name in ("Broiler 2026-10-28", "Broiler 2026-10-28 2"):
+		for name in ("Broiler 2026-10-28", "Broiler 2026-10-28 2", "Broiler 2026-10-28 3"):
 			if frappe.db.exists("Livestock Batch", name):
 				frappe.delete_doc("Livestock Batch", name, force=True)
 
@@ -61,8 +81,17 @@ class TestLivestockBatch(IntegrationTestCase):
 				"quantity_placed": 500,
 			}
 		).insert()
+		third = frappe.get_doc(
+			{
+				"doctype": "Livestock Batch",
+				"livestock_type": "Broiler",
+				"start_date": "2026-10-28",
+				"quantity_placed": 500,
+			}
+		).insert()
 		self.assertEqual(first.name, "Broiler 2026-10-28")
 		self.assertEqual(second.name, "Broiler 2026-10-28 2")
+		self.assertEqual(third.name, "Broiler 2026-10-28 3")
 
 	def test_sold_is_not_hand_editable(self):
 		batch = frappe.get_doc(
@@ -78,6 +107,25 @@ class TestLivestockBatch(IntegrationTestCase):
 			frappe.exceptions.ValidationError, "maintained automatically"
 		):
 			batch.save()
+
+	def test_quantity_placed_is_set_only_once(self):
+		_ensure_batch_manager()
+		batch = frappe.get_doc(
+			{
+				"doctype": "Livestock Batch",
+				"livestock_type": "Broiler",
+				"start_date": "2026-10-28",
+				"quantity_placed": 500,
+			}
+		).insert()
+		frappe.set_user(BATCH_MANAGER_EMAIL)
+		try:
+			doc = frappe.get_doc("Livestock Batch", batch.name)
+			doc.quantity_placed = 600
+			with self.assertRaises(frappe.exceptions.ValidationError):
+				doc.save()
+		finally:
+			frappe.set_user("Administrator")
 
 	def test_stage_and_age_are_computed(self):
 		doc = self._make(start_days_ago=25)  # 25 days old -> Grower
