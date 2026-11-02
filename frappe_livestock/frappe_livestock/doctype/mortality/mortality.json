@@ -8,7 +8,10 @@
   "batch",
   "date",
   "qty",
-  "reason"
+  "reason",
+  "reason_details",
+  "age_days",
+  "stage"
  ],
  "fields": [
   {
@@ -22,24 +25,44 @@
    "fieldname": "date",
    "fieldtype": "Date",
    "label": "Date",
-   "default": "Today"
+   "default": "Today",
+   "reqd": 1
   },
   {
    "fieldname": "qty",
    "fieldtype": "Int",
-   "label": "Qty",
+   "label": "Birds Lost",
    "reqd": 1
   },
   {
    "fieldname": "reason",
+   "fieldtype": "Select",
+   "label": "Reason",
+   "options": "Disease\nHeat\nPredator\nOther"
+  },
+  {
+   "fieldname": "reason_details",
    "fieldtype": "Small Text",
-   "label": "Reason"
+   "label": "Reason Details",
+   "depends_on": "eval:doc.reason == 'Other'"
+  },
+  {
+   "fieldname": "age_days",
+   "fieldtype": "Int",
+   "label": "Age (Days)",
+   "read_only": 1
+  },
+  {
+   "fieldname": "stage",
+   "fieldtype": "Data",
+   "label": "Stage",
+   "read_only": 1
   }
  ],
  "index_web_pages_for_search": 1,
  "istable": 0,
  "links": [],
- "modified": "2026-10-28 00:00:00.000000",
+ "modified": "2026-11-02 00:00:00.000000",
  "modified_by": "Administrator",
  "module": "Frappe Livestock",
  "name": "Mortality",
@@ -80,5 +103,5 @@
  "sort_field": "date",
  "sort_order": "DESC",
  "states": [],
- "track_changes": 0
+ "track_changes": 1
 }
