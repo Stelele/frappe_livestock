@@ -8,6 +8,13 @@ def get_purchase_context(company=None):
 	Resolves the company, warehouse, and mode of payment defaults plus a
 	list of human-readable warnings shown BEFORE the user types anything.
 
+	Warehouse: the Livestock Settings value when it names a real leaf
+	warehouse of the resolved company (a missing / group / wrong-company
+	value warns and resolves to None); otherwise the company's single leaf
+	warehouse when exactly one exists, else None.
+	Mode of Payment: the settings value when it exists; otherwise "Cash"
+	when a Mode of Payment named Cash exists; otherwise None + warning.
+
 	Args:
 		company: Optional company override. When omitted (None), the user's
 			default company is used. Passing company="" explicitly forces
@@ -30,10 +37,24 @@ def get_purchase_context(company=None):
 			company = None
 
 	warehouse = None
-	if settings_wh and frappe.db.exists("Warehouse", settings_wh):
-		warehouse = settings_wh
+	if settings_wh:
+		wh_company = frappe.db.get_value("Warehouse", settings_wh, "company")
+		if wh_company is None:
+			warnings.append(
+				f"Default warehouse '{settings_wh}' is configured in Livestock Settings but does not exist."
+			)
+		elif company and wh_company != company:
+			warnings.append(
+				f"Default warehouse '{settings_wh}' belongs to company '{wh_company}', not '{company}'."
+			)
+		elif frappe.db.get_value("Warehouse", settings_wh, "is_group"):
+			warnings.append(
+				f"Default warehouse '{settings_wh}' is a group warehouse, not a leaf warehouse."
+			)
+		else:
+			warehouse = settings_wh
 	elif company:
-		leaf = frappe.db.get_list(
+		leaf = frappe.get_all(
 			"Warehouse", filters={"company": company, "is_group": 0}, pluck="name"
 		)
 		if len(leaf) == 1:
@@ -42,19 +63,16 @@ def get_purchase_context(company=None):
 	mode_of_payment = None
 	if settings_mop and frappe.db.exists("Mode of Payment", settings_mop):
 		mode_of_payment = settings_mop
+	elif settings_mop:
+		warnings.append(
+			f"Mode of Payment '{settings_mop}' is configured in Livestock Settings but does not exist."
+		)
+	elif frappe.db.exists("Mode of Payment", "Cash"):
+		mode_of_payment = "Cash"
 	else:
-		if settings_mop:
-			warnings.append(
-				f"Mode of Payment '{settings_mop}' is configured in Livestock Settings but does not exist."
-			)
-		elif not frappe.db.exists("Mode of Payment", "Cash"):
-			warnings.append(
-				'No valid Mode of Payment configured in Livestock Settings and "Cash" does not exist. Please create one.'
-			)
-		else:
-			warnings.append(
-				"No valid Mode of Payment configured in Livestock Settings. Please set one."
-			)
+		warnings.append(
+			'No valid Mode of Payment configured in Livestock Settings and "Cash" does not exist. Please create one.'
+		)
 
 	if company:
 		if not frappe.db.get_value("Company", company, "default_cash_account"):
