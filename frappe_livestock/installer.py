@@ -25,6 +25,7 @@ REPORTING_PERMISSIONS = {
 	"Housing Region": {"read": 1},
 	"Mortality": {"read": 1},
 	"Feed Event": {"read": 1},
+	"Livestock Weight": {"read": 1},
 	# ERPNext core the reporting joins read through
 	"Account": {"read": 1},
 	"Company": {"read": 1},
@@ -130,6 +131,7 @@ def ensure_livestock_roles():
 		"Livestock Batch",
 		"Feed Event",
 		"Mortality",
+		"Livestock Weight",
 		"Batch Cost",
 		"Batch Sale",
 		"Housing",
@@ -137,7 +139,7 @@ def ensure_livestock_roles():
 		_ensure_role_ptypes(doctype, LIVESTOCK_MANAGER_ROLE, full, add_permission, update_permission_property)
 	for doctype in ("Livestock Stage", "Housing Region", "Batch Cost Item", "Batch Sale Item"):
 		_ensure_role_ptypes(doctype, LIVESTOCK_MANAGER_ROLE, ("read",), add_permission, update_permission_property)
-	for doctype in ("Feed Event", "Mortality"):
+	for doctype in ("Feed Event", "Mortality", "Livestock Weight"):
 		_ensure_role_ptypes(
 			doctype, LIVESTOCK_OPERATOR_ROLE, ("create", "read", "report", "write"), add_permission, update_permission_property
 		)
