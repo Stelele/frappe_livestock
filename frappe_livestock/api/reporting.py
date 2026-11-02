@@ -297,3 +297,101 @@ def mortality_rows(batch=None, from_date=None, to_date=None):
 		fields=["name", "batch", "date", "qty", "reason"],
 		order_by="date asc",
 	)
+
+
+@frappe.whitelist()
+def get_ops_snapshot(batch):
+	"""One-call ops snapshot for a batch: summary + feed + weights + freshness + P&L + readiness.
+
+	Opens with the same 14 keys as `api.batch.get_batch_summary` (same doc-method
+	math), then the dashboard's derived numbers — all read-only. FCR is honest:
+	it needs a positive weight GAIN (latest minus earliest average weight); a
+	single weighing or flat weights yield `fcr = None`, never a made-up ratio.
+	"""
+	_gate()
+	doc = frappe.get_doc("Livestock Batch", batch)
+	today = frappe.utils.getdate(frappe.utils.today())
+
+	mortalities_total = doc.mortalities_total()
+	quantity_placed = int(doc.quantity_placed or 0)
+
+	feed_rows = frappe.db.get_list(
+		"Feed Event", filters={"batch": batch}, fields=["date", "qty"], order_by="date asc"
+	)
+	feed_consumed_total = sum(float(row.qty or 0) for row in feed_rows)
+	feed_consumed_today = sum(float(row.qty or 0) for row in feed_rows if str(row.date) == str(today))
+	last_feed_date = str(feed_rows[-1].date) if feed_rows else None
+
+	stocking_item = frappe.db.get_value("Livestock Type", doc.livestock_type, "stocking_item")
+	cost_rows = frappe.db.get_all("Batch Cost Item", filters={"batch": batch}, fields=["item_code", "amount"])
+	feed_bought_total = sum(float(row.amount or 0) for row in cost_rows if row.item_code != stocking_item)
+
+	mort_dates = frappe.db.get_list(
+		"Mortality", filters={"batch": batch}, fields=["date"], order_by="date asc"
+	)
+	last_mortality_date = str(mort_dates[-1].date) if mort_dates else None
+
+	weight_rows = frappe.db.get_list(
+		"Livestock Weight",
+		filters={"batch": batch},
+		fields=["date", "average_weight_kg"],
+		order_by="date asc",
+	)
+	if weight_rows:
+		first, last = weight_rows[0], weight_rows[-1]
+		earliest_weight = {"date": str(first.date), "average_weight_kg": first.average_weight_kg}
+		latest_weight = {"date": str(last.date), "average_weight_kg": last.average_weight_kg}
+		weight_gain_kg = float(last.average_weight_kg or 0) - float(first.average_weight_kg or 0)
+	else:
+		earliest_weight = None
+		latest_weight = None
+		weight_gain_kg = 0.0
+	fcr = (feed_consumed_total / weight_gain_kg) if weight_gain_kg > 0 else None
+
+	revenue = float(
+		frappe.db.sql("select sum(amount) from `tabBatch Sale Item` where batch = %s", batch)[0][0]
+		or 0
+	)
+	total_cost = doc.total_cost()
+	profit = revenue - total_cost
+	margin = (profit / revenue) if revenue else 0
+
+	expected_ready = doc.expected_ready_date()
+	days_to_ready = (frappe.utils.getdate(expected_ready) - today).days if expected_ready else None
+
+	return {
+		"name": doc.name,
+		"livestock_type": doc.livestock_type,
+		"start_date": doc.start_date,
+		"age_days": doc.age_days(),
+		"stage": doc.stage_name(),
+		"expected_ready_date": expected_ready,
+		"quantity_placed": quantity_placed,
+		"mortalities_total": mortalities_total,
+		"surviving": doc.surviving(),
+		"remaining": doc.remaining(),
+		"sold": int(doc.sold or 0),
+		"total_cost": total_cost,
+		"cost_per_head": doc.cost_per_head(),
+		"status": doc.status,
+		"mortality_pct": (mortalities_total / quantity_placed) if quantity_placed else 0.0,
+		"feed_consumed_today": feed_consumed_today,
+		"feed_consumed_total": feed_consumed_total,
+		"feed_bought_total": feed_bought_total,
+		"earliest_weight": earliest_weight,
+		"latest_weight": latest_weight,
+		"earliest_weight_kg": earliest_weight["average_weight_kg"] if earliest_weight else None,
+		"earliest_weight_date": earliest_weight["date"] if earliest_weight else None,
+		"latest_weight_kg": latest_weight["average_weight_kg"] if latest_weight else None,
+		"latest_weight_date": latest_weight["date"] if latest_weight else None,
+		"last_weight_kg": latest_weight["average_weight_kg"] if latest_weight else None,
+		"last_weight_date": latest_weight["date"] if latest_weight else None,
+		"weight_gain_kg": weight_gain_kg,
+		"fcr": fcr,
+		"last_feed_date": last_feed_date,
+		"last_mortality_date": last_mortality_date,
+		"revenue": revenue,
+		"profit": profit,
+		"margin": margin,
+		"days_to_ready": days_to_ready,
+	}
