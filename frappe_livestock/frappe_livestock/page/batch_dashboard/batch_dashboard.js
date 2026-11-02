@@ -1,7 +1,1 @@
-frappe.pages['batch-dashboard'].on_page_load = function(wrapper) {
-	var page = frappe.ui.make_app_page({
-		parent: wrapper,
-		title: 'Batch Dashboard',
-		single_column: true
-	});
-}
+// Batch Dashboard page shell: logic lives in public/js/batch_dashboard.js via the page_js hook (sole owner).
