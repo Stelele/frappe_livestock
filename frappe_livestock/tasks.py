@@ -12,6 +12,8 @@ Each nudge is idempotent per day: a row with the same subject created today
 is never duplicated.
 """
 
+import traceback
+
 import frappe
 from frappe.utils import getdate, today
 
@@ -25,13 +27,17 @@ def _recipients() -> list[str]:
 		},
 		pluck="parent",
 	)
-	users = sorted({u for u in users if u})
+	users = sorted(
+		{u for u in users if u and frappe.get_value("User", u, "enabled") == 1}
+	)
 	if "Administrator" not in users:
 		users.append("Administrator")
 	return users
 
 
 def _notify(user: str, subject: str, batch_name: str) -> None:
+	# No unique index on Notification Log, so check-then-insert can double-emit
+	# under concurrent runs; acceptable — the daily cron never runs concurrently.
 	if frappe.db.exists(
 		"Notification Log",
 		{"for_user": user, "subject": subject, "creation": [">=", today()]},
@@ -53,7 +59,7 @@ def _notify(user: str, subject: str, batch_name: str) -> None:
 def _ensure_alert_type() -> None:
 	if not frappe.db.exists("Notification Type", "Alert"):
 		frappe.get_doc({"doctype": "Notification Type", "type_name": "Alert"}).insert(
-			ignore_permissions=True
+			ignore_permissions=True, ignore_if_duplicate=True
 		)
 
 
@@ -67,27 +73,36 @@ def daily() -> None:
 		fields=["name", "start_date"],
 	)
 	for b in batches:
-		batch = frappe.get_doc("Livestock Batch", b.name)
+		# Daily-only wiring: a mid-loop crash would suppress remaining nudges
+		# until tomorrow, so each batch is isolated and failures are logged.
+		try:
+			batch = frappe.get_doc("Livestock Batch", b.name)
 
-		expected = batch.expected_ready_date()
-		if expected and getdate(expected) <= td:
-			subject = f"Batch {batch.name} should be marked Ready today"
-			for user in users:
-				_notify(user, subject, batch.name)
+			expected = batch.expected_ready_date()
+			if expected and getdate(expected) <= td:
+				subject = f"Batch {batch.name} should be marked Ready today"
+				for user in users:
+					_notify(user, subject, batch.name)
 
-		last_feed = frappe.db.get_value(
-			"Feed Event", {"batch": batch.name}, "date", order_by="date desc"
-		)
-		last_mortality = frappe.db.get_value(
-			"Mortality", {"batch": batch.name}, "date", order_by="date desc"
-		)
-		entry_dates = [getdate(d) for d in (last_feed, last_mortality) if d]
-		if entry_dates:
-			days = (td - max(entry_dates)).days
-		else:
-			days = (td - getdate(batch.start_date)).days
-		threshold = 3 if not entry_dates else 2
-		if days >= threshold:
-			subject = f"Batch {batch.name}: no entries recorded in {days} days"
-			for user in users:
-				_notify(user, subject, batch.name)
+			last_feed = frappe.db.get_value(
+				"Feed Event", {"batch": batch.name}, "date", order_by="date desc"
+			)
+			last_mortality = frappe.db.get_value(
+				"Mortality", {"batch": batch.name}, "date", order_by="date desc"
+			)
+			entry_dates = [getdate(d) for d in (last_feed, last_mortality) if d]
+			if entry_dates:
+				days = (td - max(entry_dates)).days
+			else:
+				days = (td - getdate(batch.start_date)).days
+			threshold = 3 if not entry_dates else 2
+			if days >= threshold:
+				subject = f"Batch {batch.name}: no entries recorded in {days} days"
+				for user in users:
+					_notify(user, subject, batch.name)
+		except Exception:
+			frappe.log_error(
+				title=f"livestock daily nudge for {b.name}",
+				message=traceback.format_exc(),
+			)
+			continue

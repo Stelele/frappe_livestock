@@ -27,6 +27,32 @@ def ensure_task_type():
 		).insert(ignore_if_duplicate=True)
 
 
+MANAGER_EMAIL = "t16_manager@example.com"
+DISABLED_EMAIL = "t16_disabled@example.com"
+DANGLING_TYPE = "T16 Dangling"
+
+
+def ensure_user(email, enabled, role="Livestock Manager"):
+	if frappe.db.exists("User", email):
+		u = frappe.get_doc("User", email)
+		u.enabled = 1 if enabled else 0
+		if role not in [r.role for r in u.roles]:
+			u.append("roles", {"role": role})
+		u.save(ignore_permissions=True)
+	else:
+		u = frappe.get_doc(
+			{
+				"doctype": "User",
+				"email": email,
+				"first_name": email.split("@")[0],
+				"enabled": 1 if enabled else 0,
+				"roles": [{"role": role}],
+			}
+		).insert(ignore_permissions=True)
+	frappe.db.commit()
+	return u.name
+
+
 class TestDailyNudges(IntegrationTestCase):
 	def setUp(self):
 		super().setUp()
@@ -59,6 +85,7 @@ class TestDailyNudges(IntegrationTestCase):
 		return frappe.db.count("Notification Log", {"subject": subject})
 
 	def test_ready_and_quiet_nudges_then_idempotent(self):
+		manager = ensure_user(MANAGER_EMAIL, enabled=True)
 		self._make_batch(self.old_start)
 		ready_subject = f"Batch {self.old_name} should be marked Ready today"
 		quiet_subject = f"Batch {self.old_name}: no entries recorded in 60 days"
@@ -67,6 +94,11 @@ class TestDailyNudges(IntegrationTestCase):
 
 		self.assertGreaterEqual(self._count(ready_subject), 1)
 		self.assertGreaterEqual(self._count(quiet_subject), 1)
+		recipients = set(
+			frappe.get_all("Notification Log", {"subject": ready_subject}, pluck="for_user")
+		)
+		self.assertIn("Administrator", recipients)
+		self.assertIn(manager, recipients)
 
 		# second run same day: no duplicates
 		ready_before = self._count(ready_subject)
@@ -113,3 +145,67 @@ class TestDailyNudges(IntegrationTestCase):
 			frappe.db.count("Notification Log", {"subject": ["like", f"%{self.fresh_name}%"]}),
 			0,
 		)
+
+	def test_disabled_manager_gets_no_nudge(self):
+		ensure_user(MANAGER_EMAIL, enabled=True)
+		disabled = ensure_user(DISABLED_EMAIL, enabled=False)
+		self._make_batch(self.old_start)
+		ready_subject = f"Batch {self.old_name} should be marked Ready today"
+		quiet_subject = f"Batch {self.old_name}: no entries recorded in 60 days"
+
+		daily()
+
+		self.assertGreaterEqual(self._count(ready_subject), 1)
+		self.assertEqual(
+			frappe.db.count(
+				"Notification Log", {"for_user": disabled, "subject": ready_subject}
+			),
+			0,
+		)
+		self.assertEqual(
+			frappe.db.count(
+				"Notification Log", {"for_user": disabled, "subject": quiet_subject}
+			),
+			0,
+		)
+
+	def test_broken_batch_does_not_block_others(self):
+		if not frappe.db.exists("Livestock Type", DANGLING_TYPE):
+			frappe.get_doc(
+				{
+					"doctype": "Livestock Type",
+					"livestock_type_name": DANGLING_TYPE,
+					"stages": STAGES,
+				}
+			).insert(ignore_if_duplicate=True)
+			frappe.db.commit()
+		bad_start = add_days(today(), -60)
+		bad_name = f"{DANGLING_TYPE} {bad_start}"
+		frappe.db.delete("Notification Log", {"subject": ["like", f"%{bad_name}%"]})
+		frappe.db.delete("Livestock Batch", {"name": bad_name})
+		frappe.db.commit()
+		frappe.get_doc(
+			{
+				"doctype": "Livestock Batch",
+				"livestock_type": DANGLING_TYPE,
+				"start_date": bad_start,
+				"quantity_placed": 50,
+				"status": "Active",
+			}
+		).insert()
+		frappe.db.commit()
+		# Dangling reference: expected_ready_date() now raises DoesNotExistError.
+		frappe.db.delete("Livestock Type", DANGLING_TYPE)
+		frappe.db.commit()
+
+		self._make_batch(self.old_start)
+		ready_subject = f"Batch {self.old_name} should be marked Ready today"
+
+		try:
+			daily()  # must not raise despite the broken batch
+		finally:
+			frappe.db.delete("Livestock Batch", {"name": bad_name})
+			frappe.db.delete("Notification Log", {"subject": ["like", f"%{bad_name}%"]})
+			frappe.db.commit()
+
+		self.assertGreaterEqual(self._count(ready_subject), 1)
