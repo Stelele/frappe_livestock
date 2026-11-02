@@ -1,0 +1,240 @@
+{
+ "charts": [],
+ "content": "[{\"id\":\"lvst000001\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Batch Dashboard\",\"col\":3}},{\"id\":\"lvst000002\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Livestock Purchase\",\"col\":3}},{\"id\":\"lvst000003\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New Livestock Batch\",\"col\":3}},{\"id\":\"lvst000004\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New Feed Event\",\"col\":3}},{\"id\":\"lvst000005\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New Mortality\",\"col\":3}},{\"id\":\"lvst000006\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"New Livestock Weight\",\"col\":3}},{\"id\":\"lvst000007\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Livestock Batch\",\"col\":3}},{\"id\":\"lvst000008\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Batch Cost\",\"col\":3}},{\"id\":\"lvst000009\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Batch Sale\",\"col\":3}},{\"id\":\"lvst000010\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Housing\",\"col\":3}},{\"id\":\"lvst000011\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Livestock Type\",\"col\":3}},{\"id\":\"lvst000012\",\"type\":\"shortcut\",\"data\":{\"shortcut_name\":\"Livestock Settings\",\"col\":3}},{\"id\":\"lvst000013\",\"type\":\"spacer\",\"data\":{\"col\":12}},{\"id\":\"lvst000014\",\"type\":\"card\",\"data\":{\"card_name\":\"Shortcuts\",\"col\":4}},{\"id\":\"lvst000015\",\"type\":\"card\",\"data\":{\"card_name\":\"Masters\",\"col\":4}},{\"id\":\"lvst000016\",\"type\":\"card\",\"data\":{\"card_name\":\"Cross-links\",\"col\":4}}]",
+ "creation": "2026-11-02 00:00:00.000000",
+ "custom_blocks": [],
+ "docstatus": 0,
+ "doctype": "Workspace",
+ "for_user": "",
+ "hide_custom": 0,
+ "icon": "package",
+ "idx": 1,
+ "is_hidden": 0,
+ "label": "Livestock",
+ "links": [
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Shortcuts",
+   "link_count": 2,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Batch Dashboard",
+   "link_count": 0,
+   "link_to": "batch-dashboard",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Livestock Purchase",
+   "link_count": 0,
+   "link_to": "purchase-entry",
+   "link_type": "Page",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Masters",
+   "link_count": 4,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Livestock Batch",
+   "link_count": 0,
+   "link_to": "Livestock Batch",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Housing",
+   "link_count": 0,
+   "link_to": "Housing",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Livestock Type",
+   "link_count": 0,
+   "link_to": "Livestock Type",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Livestock Settings",
+   "link_count": 0,
+   "link_to": "Livestock Settings",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Cross-links",
+   "link_count": 5,
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Card Break"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Batch Cost",
+   "link_count": 0,
+   "link_to": "Batch Cost",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Batch Sale",
+   "link_count": 0,
+   "link_to": "Batch Sale",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Feed Event",
+   "link_count": 0,
+   "link_to": "Feed Event",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Mortality",
+   "link_count": 0,
+   "link_to": "Mortality",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  },
+  {
+   "hidden": 0,
+   "is_query_report": 0,
+   "label": "Livestock Weight",
+   "link_count": 0,
+   "link_to": "Livestock Weight",
+   "link_type": "DocType",
+   "onboard": 0,
+   "type": "Link"
+  }
+ ],
+ "modified": "2026-11-02 00:00:00.000000",
+ "modified_by": "Administrator",
+ "module": "Frappe Livestock",
+ "name": "Livestock",
+ "number_cards": [],
+ "owner": "Administrator",
+ "parent_page": "",
+ "public": 1,
+ "quick_lists": [],
+ "restrict_to_domain": "",
+ "roles": [],
+ "sequence_id": 40.0,
+ "shortcuts": [
+  {
+   "label": "Batch Dashboard",
+   "link_to": "batch-dashboard",
+   "type": "Page"
+  },
+  {
+   "label": "Livestock Purchase",
+   "link_to": "purchase-entry",
+   "type": "Page"
+  },
+  {
+   "doc_view": "New",
+   "label": "New Livestock Batch",
+   "link_to": "Livestock Batch",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "New",
+   "label": "New Feed Event",
+   "link_to": "Feed Event",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "New",
+   "label": "New Mortality",
+   "link_to": "Mortality",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "New",
+   "label": "New Livestock Weight",
+   "link_to": "Livestock Weight",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "List",
+   "label": "Livestock Batch",
+   "link_to": "Livestock Batch",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "List",
+   "label": "Batch Cost",
+   "link_to": "Batch Cost",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "List",
+   "label": "Batch Sale",
+   "link_to": "Batch Sale",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "List",
+   "label": "Housing",
+   "link_to": "Housing",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "List",
+   "label": "Livestock Type",
+   "link_to": "Livestock Type",
+   "type": "DocType"
+  },
+  {
+   "doc_view": "List",
+   "label": "Livestock Settings",
+   "link_to": "Livestock Settings",
+   "type": "DocType"
+  }
+ ],
+ "standard": 1,
+ "title": "Livestock",
+ "type": "Workspace"
+}
