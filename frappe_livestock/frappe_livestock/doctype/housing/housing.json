@@ -6,49 +6,76 @@
  "doctype": "DocType",
  "engine": "InnoDB",
  "field_order": [
+  "details_section",
   "housing_name",
   "housing_type",
-  "capacity",
   "status",
+  "capacity",
+  "maintenance_section",
   "last_used_date",
   "last_cleaned_date",
   "regions"
  ],
  "fields": [
   {
+   "fieldname": "details_section",
+   "fieldtype": "Section Break",
+   "label": "Details"
+  },
+  {
    "fieldname": "housing_name",
    "fieldtype": "Data",
+   "in_list_view": 1,
    "label": "Housing Name",
    "reqd": 1,
    "unique": 1
   },
   {
+   "default": "General",
    "fieldname": "housing_type",
    "fieldtype": "Select",
+   "in_list_view": 1,
+   "in_standard_filter": 1,
    "label": "Housing Type",
-   "options": "Brooding\nGrower\nFinisher\nGeneral"
-  },
-  {
-   "fieldname": "capacity",
-   "fieldtype": "Int",
-   "label": "Capacity"
+   "options": "Brooding\nGrower\nFinisher\nGeneral",
+   "reqd": 1
   },
   {
    "fieldname": "status",
    "fieldtype": "Select",
    "label": "Status",
-   "options": "Occupied\nResting\nReady",
-   "default": "Ready"
+   "options": "Ready\nResting\nOccupied",
+   "default": "Ready",
+   "in_list_view": 1,
+   "in_standard_filter": 1
   },
   {
+   "default": 0,
+   "description": "Maximum head count (sum of regions should not exceed this).",
+   "fieldname": "capacity",
+   "fieldtype": "Int",
+   "in_list_view": 1,
+   "label": "Capacity"
+  },
+  {
+   "collapsible": 1,
+   "fieldname": "maintenance_section",
+   "fieldtype": "Section Break",
+   "label": "Maintenance"
+  },
+  {
+   "description": "Set automatically.",
    "fieldname": "last_used_date",
    "fieldtype": "Date",
-   "label": "Last Used Date"
+   "label": "Last Used Date",
+   "read_only": 1
   },
   {
+   "description": "Set automatically.",
    "fieldname": "last_cleaned_date",
    "fieldtype": "Date",
-   "label": "Last Cleaned Date"
+   "label": "Last Cleaned Date",
+   "read_only": 1
   },
   {
    "fieldname": "regions",
@@ -60,7 +87,7 @@
  "index_web_pages_for_search": 1,
  "istable": 0,
  "links": [],
- "modified": "2026-10-28 00:00:00.000000",
+ "modified": "2026-11-02 20:17:29.000000",
  "modified_by": "Administrator",
  "module": "Frappe Livestock",
  "name": "Housing",
@@ -100,5 +127,5 @@
  "sort_order": "ASC",
  "states": [],
  "title_field": "housing_name",
- "track_changes": 0
+ "track_changes": 1
 }
