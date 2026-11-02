@@ -264,6 +264,15 @@ class TestSaleAllocation(IntegrationTestCase):
 		with self.assertRaisesRegex(frappe.ValidationError, "Only 5 head remain"):
 			create_batch_sales_invoice(batch.name, 10, self._sale_customer(), 10)
 
+	def test_create_batch_sales_invoice_rejects_nonpositive_qty(self):
+		self._point_broiler_at_item(self._sale_item())
+		batch = self._ready_batch("2026-10-28", placed=500)
+		customer = self._sale_customer()
+		with self.assertRaisesRegex(frappe.ValidationError, "at least 1"):
+			create_batch_sales_invoice(batch.name, 0, customer, 10)
+		with self.assertRaisesRegex(frappe.ValidationError, "at least 1"):
+			create_batch_sales_invoice(batch.name, -5, customer, 10)
+
 	def test_create_batch_sales_invoice_surfaces_shortfall(self):
 		# Active (never Ready) batch: cap check passes (remaining 500) but the
 		# on_submit hook allocates 0, so the helper must throw.

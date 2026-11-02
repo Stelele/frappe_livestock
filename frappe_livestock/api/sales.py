@@ -211,7 +211,7 @@ def create_batch_sales_invoice(batch, qty, customer, rate, mode_of_payment="Cash
 
 	qty = int(qty or 0)
 	if qty <= 0:
-		frappe.throw("Qty must be at least 1")
+		frappe.throw(frappe._("Qty must be at least 1"))
 	remaining = batch_doc.remaining()
 	if qty > remaining:
 		frappe.throw(f"Only {remaining} head remain on batch {batch}")
