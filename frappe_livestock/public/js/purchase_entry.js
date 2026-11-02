@@ -46,8 +46,8 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 		fields: [
 			F("supplier", "Supplier", "Link", { options: "Supplier", reqd: 1 }), CB(),
 			F("warehouse", "Warehouse", "Link", { options: "Warehouse", reqd: 1, get_query: company_filter([["is_group", "=", 0]]) }), CB(),
-			F("invoice_date", "Invoice date", "Date", { default: "Today" }), CB(),
-			F("mode_of_payment", "Mode of payment", "Link", { options: "Mode of Payment", reqd: 1, default: "Cash" }), CB(),
+			F("invoice_date", "Invoice date", "Date"), CB(),
+			F("mode_of_payment", "Mode of payment", "Link", { options: "Mode of Payment", reqd: 1 }), CB(),
 			F("invoice_number", "Supplier invoice no.", "Data"),
 		],
 	});
@@ -179,12 +179,17 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 	add_alloc_row();
 	frappe.call("frappe_livestock.api.settings.get_purchase_context").then(function (r) {
 		ctx = r.message || {};
-		if (ctx.warehouse) purchase_head.fields_dict.warehouse.set_input(ctx.warehouse);
-		if (ctx.mode_of_payment) purchase_head.fields_dict.mode_of_payment.set_input(ctx.mode_of_payment);
+		// FieldGroup.get_values() only applies df.default when include_default is
+		// set, so dead `default:` keys were removed above and defaults are set
+		// here instead — only into still-empty fields so user input is kept.
+		if (ctx.warehouse && !purchase_head.fields_dict.warehouse.get_value()) purchase_head.fields_dict.warehouse.set_value(ctx.warehouse);
+		if (ctx.mode_of_payment && !purchase_head.fields_dict.mode_of_payment.get_value()) purchase_head.fields_dict.mode_of_payment.set_value(ctx.mode_of_payment);
+		purchase_head.fields_dict.invoice_date.set_value(frappe.datetime.get_today());
 		if ((ctx.warnings || []).length) {
 			frappe.msgprint({ title: __("Setup warnings"), message: "<ul><li>" + ctx.warnings.join("</li><li>") + "</li></ul>", indicator: "orange" });
 		}
 	}).fail(function () {
+		purchase_head.fields_dict.invoice_date.set_value(frappe.datetime.get_today());
 		frappe.msgprint({ message: __("Could not load purchase defaults."), indicator: "orange" });
 	});
 };
