@@ -1,20 +1,16 @@
-// Batch Dashboard logic, loaded on the batch-dashboard page via the `page_js`
-// hook (see hooks.py). Page scripts and `page_js` files are concatenated into
-// one page script with the hook file appended last, so this definition is the
-// on_page_load handler that sticks; the page-folder file stays a minimal shell.
-//
-// The batch picker is a body-mounted FieldGroup (NOT page.add_field): in v16
-// the page-form area add_field targets is not rendered on this layout, which
-// left the dashboard with no visible selector.
+// Batch Dashboard logic via the `page_js` hook (see hooks.py). This file is the
+// SOLE page-load owner; the page-folder shell stays comment-only (as purchase-entry).
 frappe.pages["batch-dashboard"].on_page_load = function (wrapper) {
 	var page = frappe.ui.make_app_page({
 		parent: wrapper,
 		title: __("Batch Dashboard"),
 		single_column: true,
 	});
+	page.body.empty();
 
 	var $picker = $('<div class="batch-picker"></div>').appendTo(page.body);
 	var $summary = $('<div class="batch-summary"></div>').appendTo(page.body);
+	var current = null;
 
 	var picker = new frappe.ui.FieldGroup({
 		parent: $picker.get(0),
@@ -25,55 +21,180 @@ frappe.pages["batch-dashboard"].on_page_load = function (wrapper) {
 				fieldtype: "Link",
 				options: "Livestock Batch",
 				onchange: function () {
-					render_summary(picker.get_value("batch"));
+					var name = picker.get_value("batch");
+					if (!name || name === current) return;
+					if (picker.get_value("batch") !== name) return;
+					load(name);
 				},
 			},
 		],
 	});
 	picker.make();
-	// expose for tests / programmatic use
-	wrapper.page.batch_picker = picker;
 
-	function render_summary(name) {
+	function esc(v) {
+		return frappe.utils.escape_html(String(v == null ? "" : v));
+	}
+
+	function dash(v) {
+		return v == null || v === "" ? "—" : esc(v);
+	}
+
+	function money(x) {
+		if (x == null || x === "") return "—";
+		var fn = (frappe.utils && frappe.utils.fmt_money) || window.fmt_money;
+		if (typeof fn === "function") {
+			try {
+				return fn(x, 2);
+			} catch (e) {
+				// fall through to the raw number below
+			}
+		}
+		return String(x);
+	}
+
+	function rel(date_str) {
+		if (!date_str) return "—";
+		try {
+			if (frappe.datetime && typeof frappe.datetime.prettyDate === "function") {
+				return frappe.datetime.prettyDate(date_str) || String(date_str);
+			}
+			if (frappe.utils && typeof frappe.utils.pretty_date === "function") {
+				return frappe.utils.pretty_date(date_str) || String(date_str);
+			}
+		} catch (e) {
+			// fall through to the raw string below
+		}
+		return String(date_str);
+	}
+
+	function is_stale(date_str) {
+		if (!date_str) return false;
+		var d = new Date(String(date_str).replace(/-/g, "/"));
+		if (isNaN(d.getTime())) return false;
+		var now = new Date();
+		var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+		var day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+		return (today - day) / 86400000 > 1;
+	}
+
+	function fresh(date_str, is_active) {
+		if (!date_str) return "—";
+		var text = esc(rel(date_str)) + " (" + esc(date_str) + ")";
+		if (is_active && is_stale(date_str)) text = '<span class="text-danger">' + text + "</span>";
+		return text;
+	}
+
+	function pill(status) {
+		var color = status === "Active" ? "blue" : status === "Ready" ? "green" : "grey";
+		return '<span class="indicator-pill ' + color + '">' + esc(status) + "</span>";
+	}
+
+	function load(name) {
+		current = name;
 		if (!name) {
 			$summary.empty();
 			return;
 		}
-		frappe.call("frappe_livestock.api.batch.get_batch_summary", { batch: name }).then((r) => {
-			var s = r.message || {};
-			var rows = [
-				[__("Livestock Type"), s.livestock_type],
-				[__("Start Date"), s.start_date],
-				[__("Age (days)"), s.age_days],
-				[__("Stage"), s.stage],
-				[__("Expected Ready Date"), s.expected_ready_date],
-				[__("Quantity Placed"), s.quantity_placed],
-				[__("Mortalities"), s.mortalities_total],
-				[__("Surviving"), s.surviving],
-				[__("Remaining"), s.remaining],
-				[__("Sold"), s.sold],
-				[__("Total Cost"), s.total_cost],
-				[__("Cost per Head"), s.cost_per_head],
-				[__("Status"), s.status],
-			]
-				.map(
-					(row) =>
-						`<tr><td>${frappe.utils.escape_html(row[0] || "")}</td><td>${frappe.utils.escape_html(
-							String(row[1] == null ? "" : row[1])
-						)}</td></tr>`
-				)
-				.join("");
-			$summary.html(`<table class="table table-bordered"><tbody>${rows}</tbody></table>`);
-		});
+		$summary.html('<p class="text-muted">' + __("Loading…") + "</p>");
+		frappe
+			.call("frappe_livestock.api.reporting.get_ops_snapshot", { batch: name })
+			.then(function (r) {
+				if (picker.get_value("batch") !== name) return;
+				render(r.message || {});
+			})
+			.fail(function () {
+				if (picker.get_value("batch") !== name) return;
+				$summary.empty();
+				frappe.msgprint(__("You do not have Dashboard access"));
+			});
 	}
 
-	// Default to the most-recent non-closed batch. When there is no active
-	// batch, stay empty and let the human pick manually (no alert).
-	frappe.call("frappe_livestock.api.allocation.get_active_batches").then((r) => {
+	function render(s) {
+		var is_active = s.status === "Active";
+		var mort = s.mortality_pct == null ? "—" : (Number(s.mortality_pct) * 100).toFixed(1) + "%";
+		var fcr = s.fcr == null ? "—" : Number(s.fcr).toFixed(2);
+		var html = '<div class="row">';
+		html += '<div class="col-sm-3"><div class="frappe-card"><div class="text-muted">' + esc(__("Status")) + "</div><h3>" + pill(s.status) + "</h3></div></div>";
+		html += '<div class="col-sm-3"><div class="frappe-card"><div class="text-muted">' + esc(__("Surviving")) + "</div><h3>" + dash(s.surviving) + "</h3></div></div>";
+		html += '<div class="col-sm-3"><div class="frappe-card"><div class="text-muted">' + esc(__("Cost per Head")) + "</div><h3>" + esc(money(s.cost_per_head)) + "</h3></div></div>";
+		html += '<div class="col-sm-3"><div class="frappe-card"><div class="text-muted">' + esc(__("Mortality")) + "</div><h3>" + esc(mort) + "</h3></div></div>";
+		html += "</div>" + '<div class="row">';
+		html += '<div class="col-sm-3"><div class="frappe-card"><div class="text-muted">' + esc(__("FCR")) + "</div><h3>" + esc(fcr) + "</h3></div></div>";
+		html += "</div>";
+		html += '<details class="text-muted"><summary>' + esc(__("Details")) + "</summary><dl>";
+		html += "<dt>" + esc(__("Type")) + "</dt><dd>" + dash(s.livestock_type) + "</dd>";
+		html += "<dt>" + esc(__("Start Date")) + "</dt><dd>" + dash(s.start_date) + "</dd>";
+		html += "<dt>" + esc(__("Age (days)")) + "</dt><dd>" + dash(s.age_days) + "</dd>";
+		html += "<dt>" + esc(__("Stage")) + "</dt><dd>" + dash(s.stage) + "</dd>";
+		html += "<dt>" + esc(__("Placed")) + "</dt><dd>" + dash(s.quantity_placed) + "</dd>";
+		html += "<dt>" + esc(__("Sold")) + "</dt><dd>" + dash(s.sold) + "</dd>";
+		html += "<dt>" + esc(__("Remaining")) + "</dt><dd>" + dash(s.remaining) + "</dd>";
+		html += "<dt>" + esc(__("Expected Ready")) + "</dt><dd>" + dash(s.expected_ready_date) + "</dd>";
+		html += "<dt>" + esc(__("Latest Weight (kg)")) + "</dt><dd>" + (s.latest_weight_kg == null ? "—" : esc(s.latest_weight_kg) + " (" + esc(s.latest_weight_date) + ")") + "</dd>";
+		html += "<dt>" + esc(__("Last Feed")) + "</dt><dd>" + fresh(s.last_feed_date, is_active) + "</dd>";
+		html += "<dt>" + esc(__("Last Mortality")) + "</dt><dd>" + fresh(s.last_mortality_date, is_active) + "</dd>";
+		html += "</dl></details>";
+		$summary.html(html);
+	}
+
+	function need_batch() {
+		var name = picker.get_value("batch");
+		if (!name) frappe.msgprint(__("Select a batch first"));
+		return name;
+	}
+
+	function quick_capture(doctype, opts) {
+		frappe.route_options = opts;
+		frappe.new_doc(doctype);
+	}
+
+	page.add_inner_button(__("Record Feed"), function () {
+		var name = need_batch();
+		if (name) quick_capture("Feed Event", { batch: name });
+	});
+	page.add_inner_button(__("Record Mortality"), function () {
+		var name = need_batch();
+		if (name) quick_capture("Mortality", { batch: name });
+	});
+	page.add_inner_button(__("Weigh"), function () {
+		var name = need_batch();
+		if (name) quick_capture("Livestock Weight", { batch: name });
+	});
+	page.add_inner_button(__("Sell birds"), function () {
+		var name = need_batch();
+		if (!name) return;
+		frappe.prompt(
+			[
+				{ label: __("Customer"), fieldname: "customer", fieldtype: "Link", options: "Customer", reqd: 1 },
+				{ label: __("Qty"), fieldname: "qty", fieldtype: "Int", reqd: 1 },
+				{ label: __("Rate"), fieldname: "rate", fieldtype: "Currency", reqd: 1 },
+			],
+			function (values) {
+				frappe
+					.call("frappe_livestock.api.sales.create_batch_sales_invoice", { batch: name, qty: values.qty, customer: values.customer, rate: values.rate })
+					.then(function (r) {
+						var m = r.message || {};
+						frappe.msgprint(__("Invoice {0}: allocated {1}", [m.sales_invoice, m.allocated]));
+						load(picker.get_value("batch"));
+					});
+			},
+			__("Sell birds"),
+			__("Sell")
+		);
+	});
+	page.add_inner_button(__("Open Batch"), function () {
+		var name = need_batch();
+		if (name) frappe.set_route("Form", "Livestock Batch", name);
+	});
+
+	frappe.pages["batch-dashboard"].on_page_show = function () {
+		load(picker.get_value("batch"));
+	};
+
+	// Default to the most-recent active batch; never overwrite a user-picked batch.
+	frappe.call("frappe_livestock.api.allocation.get_active_batches").then(function (r) {
 		var batches = r.message || [];
-		if (!batches.length) {
-			return;
-		}
+		if (!batches.length || picker.get_value("batch")) return;
 		picker.set_value("batch", batches[0].name);
 	});
 };
