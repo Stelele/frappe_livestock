@@ -1,5 +1,5 @@
 import frappe
-from frappe.utils import flt
+from frappe.utils import flt, today
 
 
 def allocate_sales_to_ready_batches_for_type(batch_type, qty, voucher_type=None, voucher_no=None, rate=None):
@@ -54,6 +54,19 @@ def allocate_sales_to_ready_batches_for_type(batch_type, qty, voucher_type=None,
 
 	if voucher_no and allocated_per_batch:
 		_record_batch_sale(batch_type, voucher_type, voucher_no, allocated_per_batch, rate)
+
+	if remaining and frappe.request is not None:
+		# Hook-context shortfall warning: some finished birds fit in NO Ready
+		# batch. msgprint is safe outside a request too (it just appends to
+		# the message log), so the `frappe.request` guard reads as
+		# "hook context" without ever breaking background/test callers.
+		# NOTE: msgprint takes (msg, indicator=...) — the dict form would
+		# crash safe_decode, so the brief's dict literal is spelled out here.
+		frappe.msgprint(
+			f"{remaining} finished birds of type {batch_type} were allocated to NO batch "
+			"(no Ready batch with remaining head).",
+			indicator="orange",
+		)
 
 	return {"allocated": allocated, "unallocated": remaining}
 
@@ -176,3 +189,53 @@ def revoke_sale_allocation(doc=None, method=None):
 
 	frappe.delete_doc("Batch Sale", sale_name, ignore_permissions=True)
 	return {"revoked": revoked}
+
+
+@frappe.whitelist()
+def create_batch_sales_invoice(batch, qty, customer, rate, mode_of_payment="Cash"):
+	"""Create + submit a Sales Invoice of `qty` x the batch type's finished item.
+
+	Capped at the batch's `remaining()` — throws
+	`f"Only {remaining} head remain on batch {batch}"` when over. The
+	on_submit hook allocates the invoice to Ready batches automatically, so
+	this helper only reads back the Batch Sale ledger rows the hook wrote:
+	returns `{"sales_invoice", "allocated", "unallocated"}` and throws
+	`f"Only {allocated} of {qty} allocated — batch ready-state ceilings hit"`
+	when any unit fit in NO Ready batch (unallocated is 0 on success).
+
+	`mode_of_payment` is accepted for the Task 14 dashboard call signature;
+	voucher_type is always "Sales Invoice" (POS is out of scope).
+	"""
+	batch_doc = frappe.get_doc("Livestock Batch", batch)
+	finished_item = frappe.db.get_value("Livestock Type", batch_doc.livestock_type, "finished_item")
+	if not finished_item:
+		frappe.throw(f"Livestock Type {batch_doc.livestock_type} has no finished item set.")
+
+	qty = int(qty or 0)
+	remaining = batch_doc.remaining()
+	if qty > remaining:
+		frappe.throw(f"Only {remaining} head remain on batch {batch}")
+
+	si = frappe.get_doc(
+		{
+			"doctype": "Sales Invoice",
+			"company": frappe.defaults.get_user_default("company"),
+			"customer": customer,
+			"posting_date": today(),
+			"items": [{"item_code": finished_item, "qty": qty, "rate": flt(rate)}],
+		}
+	)
+	si.insert()
+	si.submit()
+
+	sale_name = frappe.db.get_value(
+		"Batch Sale", {"voucher_type": "Sales Invoice", "voucher_no": si.name}, "name"
+	)
+	allocated = 0
+	if sale_name:
+		sale = frappe.get_doc("Batch Sale", sale_name)
+		allocated = sum(int(row.qty or 0) for row in sale.items)
+	unallocated = qty - allocated
+	if unallocated > 0:
+		frappe.throw(f"Only {allocated} of {qty} allocated — batch ready-state ceilings hit")
+	return {"sales_invoice": si.name, "allocated": allocated, "unallocated": unallocated}

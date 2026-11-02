@@ -4,6 +4,7 @@ from frappe.tests import IntegrationTestCase
 from frappe_livestock.api.sales import (
 	allocate_sales_to_ready_batches,
 	allocate_sales_to_ready_batches_for_type,
+	create_batch_sales_invoice,
 )
 from frappe_livestock.frappe_livestock.doctype.livestock_type.test_livestock_type import (
 	ensure_broiler_type,
@@ -37,6 +38,58 @@ class TestSaleAllocation(IntegrationTestCase):
 				"sold": sold,
 			}
 		).insert()
+
+	def _active_batch(self, date, placed=500):
+		# Never Ready but with remaining head: the allocation seam skips it.
+		return frappe.get_doc(
+			{
+				"doctype": "Livestock Batch",
+				"livestock_type": "Broiler",
+				"start_date": date,
+				"quantity_placed": placed,
+				"status": "Active",
+				"sold": 0,
+			}
+		).insert()
+
+	def _sale_item(self, code="Task9 Sale Bird"):
+		if frappe.db.exists("Item", code):
+			return code
+		return (
+			frappe.get_doc(
+				{
+					"doctype": "Item",
+					"item_code": code,
+					"item_group": "Products",
+					"stock_uom": "Nos",
+					"is_stock_item": 0,
+					"is_sales_item": 1,
+				}
+			)
+			.insert()
+			.name
+		)
+
+	def _sale_customer(self, name="Task9 Customer"):
+		if frappe.db.exists("Customer", name):
+			return name
+		customer_group = frappe.db.get_value("Customer Group", {"is_group": 0}, "name") or "Individual"
+		territory = frappe.db.get_value("Territory", {"is_group": 0}, "name") or "Zimbabwe"
+		return (
+			frappe.get_doc(
+				{
+					"doctype": "Customer",
+					"customer_name": name,
+					"customer_group": customer_group,
+					"territory": territory,
+				}
+			)
+			.insert()
+			.name
+		)
+
+	def _point_broiler_at_item(self, item):
+		frappe.db.set_value("Livestock Type", "Broiler", "finished_item", item)
 
 	def test_sales_increment_sold_on_oldest_ready(self):
 		older = self._ready_batch("2026-10-28")
@@ -186,3 +239,52 @@ class TestSaleAllocation(IntegrationTestCase):
 		batch.reload()
 		self.assertEqual(batch.sold, 3)
 		self.assertEqual(batch.status, "Ready")
+
+	def test_create_batch_sales_invoice_allocates_and_reports(self):
+		self._point_broiler_at_item(self._sale_item())
+		batch = self._ready_batch("2026-10-28", placed=500)
+		result = create_batch_sales_invoice(batch.name, 100, self._sale_customer(), 10)
+		batch.reload()
+		self.assertEqual(batch.sold, 100)
+		self.assertEqual(batch.remaining(), 400)
+		self.assertEqual(result["allocated"], 100)
+		self.assertEqual(result["unallocated"], 0)
+		self.assertTrue(frappe.db.exists("Sales Invoice", result["sales_invoice"]))
+
+	def test_create_batch_sales_invoice_caps_at_remaining(self):
+		self._point_broiler_at_item(self._sale_item())
+		batch = self._ready_batch("2026-10-28", placed=5)
+		with self.assertRaisesRegex(frappe.ValidationError, "Only 5 head remain"):
+			create_batch_sales_invoice(batch.name, 10, self._sale_customer(), 10)
+
+	def test_create_batch_sales_invoice_surfaces_shortfall(self):
+		# Active (never Ready) batch: cap check passes (remaining 500) but the
+		# on_submit hook allocates 0, so the helper must throw.
+		self._point_broiler_at_item(self._sale_item())
+		batch = self._active_batch("2026-10-28", placed=500)
+		with self.assertRaisesRegex(frappe.ValidationError, "0 of 10 allocated"):
+			create_batch_sales_invoice(batch.name, 10, self._sale_customer(), 10)
+		batch.reload()
+		self.assertEqual(batch.sold, 0)
+
+	def test_shortfall_msgprint_on_request_context(self):
+		import types as _types
+
+		# No Ready Broiler batch here (setUp clears the fixed names; only an
+		# Active batch exists), so the whole qty is unallocated.
+		self._active_batch("2026-10-28", placed=100)
+		# Outside a request context: shortfall reported, no exception.
+		result = allocate_sales_to_ready_batches_for_type(batch_type="Broiler", qty=10)
+		self.assertEqual(result, {"allocated": 0, "unallocated": 10})
+		# Inside a (fake) request context: the msgprint path is exercised and
+		# must not break.
+		frappe.clear_messages()
+		old_request = frappe.request
+		frappe.request = _types.SimpleNamespace()
+		try:
+			result = allocate_sales_to_ready_batches_for_type(batch_type="Broiler", qty=10)
+		finally:
+			frappe.request = old_request
+		self.assertEqual(result, {"allocated": 0, "unallocated": 10})
+		logged = " ".join(str(m.get("message", "")) for m in frappe.get_message_log())
+		self.assertIn("were allocated to NO batch", logged)
