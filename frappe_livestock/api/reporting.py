@@ -265,7 +265,7 @@ def batch_gl_entries(batch, from_date=None, to_date=None):
 def feed_timeline(batch=None, from_date=None, to_date=None):
 	"""Raw feed rows: bag events for one batch (or all), in date order."""
 	_gate()
-	filters = [["event", "in", ["Open", "Finish"]]]
+	filters = []
 	if batch:
 		filters.append(["batch", "=", batch])
 	if from_date:
@@ -275,7 +275,7 @@ def feed_timeline(batch=None, from_date=None, to_date=None):
 	return frappe.db.get_list(
 		"Feed Event",
 		filters=filters,
-		fields=["name", "batch", "feed_item", "event", "date", "qty"],
+		fields=["name", "batch", "feed_item", "date", "qty"],
 		order_by="date asc",
 	)
 
