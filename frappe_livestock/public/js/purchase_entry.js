@@ -130,7 +130,7 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 				clear_alloc_rows();
 				doc.items.forEach(function (line) { add_alloc_row({ item_code: line.item_code, qty: line.qty, batch: single }); });
 			});
-		}).fail(function () {
+		}).catch(function () {
 			frappe.msgprint({ message: __("Could not load invoice lines."), indicator: "orange" });
 		});
 	}
