@@ -31,26 +31,55 @@ Pre-commit is configured to use the following tools for checking and formatting 
 - prettier
 - pyupgrade
 
-### Permissions & setup
+### Roles & setup
 
-- Custom doctypes (Livestock Batch, Livestock Type, Mortality, Batch Cost, Feed Event) are System-Manager-only by design.
-- Sale allocation works for any user who can submit a Sales Invoice (permission-free batch counters by design).
-- The batch-dashboard page ships System-Manager-only.
+`installer.ensure_livestock_roles` (runs on migrate) seeds two roles:
+
+| Role | Access |
+|---|---|
+| Livestock Manager | full perms on all livestock doctypes + both Pages + reporting gate |
+| Livestock Operator | create/read/write/report on Feed Event, Mortality, Livestock Weight; read on Livestock Batch/Type/Housing |
+
+Reporting/batch pages admit System Manager / Livestock Dashboard / Livestock Manager.
+Operators do **not** see the purchase-entry page (403 "Not permitted").
+
 - `finished_item` must be set on the Livestock Type before sale allocation activates.
 - `stocking_item` must be set on the Livestock Type before the batch's "Buy day-old chicks" action works.
 
+### Feed semantics
+
+A Feed Event is one **"feed consumed"** record (qty required, Feeding Date).
+Legacy Open/Finish bag pairs were folded by the `fold_feed_events` patch.
+
+### Batch naming
+
+`{type} {date}`; collisions get ` 2`, ` 3`, …
+
+### Workspace, scheduler, sales
+
+- **Livestock** workspace ships 12 shortcuts; purchase-entry and batch-dashboard
+  pages are rewritten on Frappe page primitives (shared `livestock_forms.js`;
+  buy dialog defaults come from `get_purchase_context`).
+- Daily scheduler nudges run via `tasks.daily` (`scheduler_events.daily`).
+- Housing moves log comments; allocation overwrite needs `force=` confirm;
+  batch sales go through `api.sales.create_batch_sales_invoice`.
+
+### Tests
+
+```bash
+bench --site development.localhost run-tests --app frappe_livestock
+```
+
 ### Reporting API (for dashboard consumers)
 
-Read-only surface under `frappe_livestock.api.reporting.*`, gated to the
-**Livestock Dashboard** role (created read-only on migrate; grant it to a
-token user to consume):
+Read-only surface under `frappe_livestock.api.reporting.*`:
 
 | Endpoint | Returns |
 |---|---|
 | `portfolio(company?, status?, from_date?, to_date?)` | one row per batch: stage, age, remaining, cost, cost/bird, revenue, profit, margin |
 | `batch_pl(batch, from_date?, to_date?)` | cost lines by category (chicks/feed/medicine), revenue lines, totals |
 | `batch_gl_entries(batch, from_date?, to_date?)` | GL Entries of every voucher the batch's cost/sale allocations point at |
-| `feed_timeline(batch?, from_date?, to_date?)` | raw bag open/finish rows |
+| `feed_timeline(batch?, from_date?, to_date?)` | raw feed-consumed rows |
 | `mortality_rows(batch?, from_date?, to_date?)` | raw death rows |
 
 Rules: raw rows out — bucketing/grouping/charting is the consumer's job;
