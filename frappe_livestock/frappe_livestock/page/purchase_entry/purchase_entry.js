@@ -1,7 +1,1 @@
-frappe.pages['purchase-entry'].on_page_load = function(wrapper) {
-	var page = frappe.ui.make_app_page({
-		parent: wrapper,
-		title: 'Livestock Purchase',
-		single_column: true
-	});
-}
+// Livestock Purchase page shell: on_page_load lives in public/js/purchase_entry.js (page_js hook), which is the sole owner.
