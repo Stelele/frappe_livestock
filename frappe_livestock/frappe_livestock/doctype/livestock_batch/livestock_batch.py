@@ -16,9 +16,10 @@ class LivestockBatch(Document):
 		self.name = name
 
 	def validate(self):
-		# capture the saved value before this write, so on_update can tell
-		# whether the stocking purchase link actually changed
+		# capture the saved values before this write, so on_update can tell
+		# whether the stocking purchase link / housing actually changed
 		self._stocking_pi_before = frappe.db.get_value(self.doctype, self.name, "stocking_purchase_invoice")
+		self._housing_before = frappe.db.get_value(self.doctype, self.name, "housing")
 		# `sold` is maintained automatically by the sales allocation hook
 		# (which writes via frappe.db.set_value, bypassing validate);
 		# any hand edit through insert/save is rejected.
@@ -37,6 +38,21 @@ class LivestockBatch(Document):
 			from frappe_livestock.api.stocking import _allocate_to_batch
 
 			_allocate_to_batch(self.name, self.stocking_purchase_invoice)
+
+		# housing movement audit: when housing changed and a new value is set,
+		# leave one traceability comment on the batch timeline
+		housing_before = getattr(self, "_housing_before", None)
+		if self.housing and self.housing != housing_before:
+			old = housing_before or "no housing"
+			frappe.get_doc(
+				{
+					"doctype": "Comment",
+					"comment_type": "Comment",
+					"reference_doctype": "Livestock Batch",
+					"reference_name": self.name,
+					"content": f"Moved from {old} to {self.housing} on {today()}",
+				}
+			).insert(ignore_permissions=True)
 
 	def age_days(self) -> int:
 		return max((getdate(today()) - getdate(self.start_date)).days, 0)
@@ -57,6 +73,19 @@ class LivestockBatch(Document):
 		return int(
 			frappe.db.sql("select sum(qty) from `tabMortality` where batch = %s", self.name)[0][0] or 0
 		)
+
+	def latest_weight(self) -> dict | None:
+		"""Newest-by-date Livestock Weight row for this batch, else None."""
+		row = frappe.db.get_value(
+			"Livestock Weight",
+			{"batch": self.name},
+			["date", "average_weight_kg"],
+			order_by="date desc",
+			as_dict=True,
+		)
+		if not row:
+			return None
+		return {"date": row.date, "average_weight_kg": row.average_weight_kg}
 
 	def surviving(self) -> int:
 		return int(self.quantity_placed or 0) - self.mortalities_total()
