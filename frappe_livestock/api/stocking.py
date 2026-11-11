@@ -86,7 +86,7 @@ def create_stocking_purchase(
 	if rate < 0:
 		frappe.throw(frappe._("Rate must be 0 or greater."))
 
-	company = company or frappe.defaults.get_user_default("Company")
+	company = company or frappe.defaults.get_user_default("company")
 
 	# reuse the full purchase chain (PO -> Receipt -> Invoice -> Payment)
 	made = create_full_purchase(

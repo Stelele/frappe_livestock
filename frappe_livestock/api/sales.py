@@ -35,6 +35,10 @@ def allocate_sales_to_ready_batches_for_type(batch_type, qty, voucher_type=None,
 		if remaining <= 0:
 			break
 		batch = frappe.get_doc("Livestock Batch", row["name"])  # read-only: ceiling only
+		# serialize the ceiling read/write against concurrent submissions so two
+		# invoices cannot both read the same remaining head and oversell
+		frappe.db.sql("select name from `tabLivestock Batch` where name = %s for update", row["name"])
+		batch = frappe.get_doc("Livestock Batch", row["name"])
 		ceiling = batch.surviving() - int(batch.sold or 0)
 		if ceiling <= 0:
 			continue
@@ -90,7 +94,17 @@ def _record_batch_sale(batch_type, voucher_doctype, voucher_no, allocated_per_ba
 		sale.posting_date = frappe.db.get_value(voucher_doctype, voucher_no, "posting_date")
 
 	for batch_name, qty in allocated_per_batch.items():
-		sale.items = [row for row in sale.items if not (row.item_code == finished_item and row.batch == batch_name)]
+		# rows are replaced per rate group: identity = (item_code, batch,
+		# unit amount), so another rate group's row for the same batch survives
+		sale.items = [
+			row
+			for row in sale.items
+			if not (
+				row.item_code == finished_item
+				and row.batch == batch_name
+				and flt(flt(row.amount or 0) / (int(row.qty or 1)), 9) == flt(rate or 0)
+			)
+		]
 		sale.append(
 			"items",
 			{
@@ -191,6 +205,8 @@ def revoke_sale_allocation(doc=None, method=None):
 def create_batch_sales_invoice(batch, qty, customer, rate, mode_of_payment="Cash"):
 	"""Create + submit a Sales Invoice of `qty` x the batch type's finished item.
 
+	Gated to System Manager / Livestock Manager / Livestock Operator.
+
 	Capped at the batch's `remaining()` — throws
 	`f"Only {remaining} head remain on batch {batch}"` when over. The
 	on_submit hook allocates the invoice to Ready batches automatically, so
@@ -204,6 +220,8 @@ def create_batch_sales_invoice(batch, qty, customer, rate, mode_of_payment="Cash
 	`mode_of_payment` is accepted for the Task 14 dashboard call signature;
 	voucher_type is always "Sales Invoice" (POS is out of scope).
 	"""
+	frappe.only_for(("System Manager", "Livestock Manager", "Livestock Operator"))
+
 	batch_doc = frappe.get_doc("Livestock Batch", batch)
 	finished_item = frappe.db.get_value("Livestock Type", batch_doc.livestock_type, "finished_item")
 	if not finished_item:
