@@ -2,13 +2,31 @@ import frappe
 from frappe.utils import flt
 
 
+class OverwriteRequired(frappe.ValidationError):
+	"""Raised when replacing Batch Cost rows needs the caller's explicit force.
+
+	Client code matches on the class name in err.exc (a structured signal) —
+	do not rely on the message wording."""
+
+
 def _invoice_rates(purchase_invoice):
+	"""Weighted-average rate per item_code.
+
+	A Purchase Invoice can carry the same item on several lines at different
+	rates; the last line must not silently win, so each item's rate is the
+	qty-weighted average of its lines (and the derived amounts then sum to
+	the invoice's item total)."""
 	rows = frappe.db.sql(
-		"select item_code, rate from `tabPurchase Invoice Item` where parent = %s",
+		"select item_code, rate, qty from `tabPurchase Invoice Item` where parent = %s",
 		purchase_invoice,
 		as_dict=True,
 	)
-	return {row["item_code"]: float(row["rate"] or 0) for row in rows}
+	agg = {}
+	for row in rows:
+		total_qty, total_amount = agg.get(row["item_code"], (0.0, 0.0))
+		qty = flt(row["qty"] or 0)
+		agg[row["item_code"]] = (total_qty + qty, total_amount + qty * flt(row["rate"] or 0))
+	return {item: amount / total if total else 0.0 for item, (total, amount) in agg.items()}
 
 
 def _row_key(row):
@@ -34,6 +52,9 @@ def _row_key(row):
 def split_purchase_to_batches(purchase_invoice, allocations, force=None):
 	"""Split a bulk purchase invoice across batches, deriving amount from PI line rates.
 
+	Gated to System Manager / Livestock Manager (writes Batch Cost rows on
+	any purchase invoice).
+
 	args:
 	        purchase_invoice: Name of the source Purchase Invoice
 	        allocations: List of {item_code, qty, batch} dicts (JSON-encoded when called over HTTP)
@@ -41,6 +62,7 @@ def split_purchase_to_batches(purchase_invoice, allocations, force=None):
 	                AND this is truthy (JSON-parsed bool). Identical rows upsert
 	                silently (idempotent); a forced overwrite leaves an audit Comment.
 	"""
+	frappe.only_for(("System Manager", "Livestock Manager"))
 	allocations = frappe.parse_json(allocations) or []
 	if isinstance(force, str):
 		try:
@@ -83,7 +105,8 @@ def split_purchase_to_batches(purchase_invoice, allocations, force=None):
 		if old_keys != new_keys:
 			if not force:
 				frappe.throw(
-					f"Batch Cost {doc.name} already exists with different rows. Confirm overwrite to proceed."
+					f"Batch Cost {doc.name} already exists with different rows. Confirm overwrite to proceed.",
+					OverwriteRequired,
 				)
 			old_total = flt(sum(flt((row.amount if hasattr(row, 'amount') else row.get('amount')) or 0) for row in doc.items), 2)
 			new_total = flt(sum(flt(row.get('amount') or 0) for row in rows), 2)

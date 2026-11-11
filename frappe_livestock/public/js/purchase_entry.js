@@ -2,11 +2,11 @@
 // Payment (supplier paid in full), then allocates bags across batches so
 // cost-per-head stays live. Sole `on_page_load` owner via the `page_js` hook.
 frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
-	var page = frappe.ui.make_app_page({ parent: wrapper, title: __("Livestock Purchase"), single_column: true });
+	const page = frappe.ui.make_app_page({ parent: wrapper, title: __("Livestock Purchase"), single_column: true });
 	// Context resolved once per page entry; company re-read inside the create
 	// handler so a stale user default cannot leak into the purchase chain.
-	var ctx = { company: null, warehouse: null, mode_of_payment: null };
-	var item_rows = [], allocate_rows = [], creating = false, allocating = false;
+	let ctx = { company: null, warehouse: null, mode_of_payment: null };
+	let item_rows = [], allocate_rows = [], creating = false, allocating = false;
 
 	page.body.empty();
 	page.body.append(
@@ -29,7 +29,7 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 		return [F("item_code", "Item", "Link", { options: "Item", reqd: 1 }), CB(), left, CB(), right];
 	}
 	function new_row(mount, fields) {
-		var fg = new frappe.ui.FieldGroup({ parent: $("<div></div>").appendTo(mount).get(0), fields: fields });
+		const fg = new frappe.ui.FieldGroup({ parent: $("<div></div>").appendTo(mount).get(0), fields: fields });
 		fg.make();
 		return fg;
 	}
@@ -41,7 +41,7 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 		if (d.rate) fg.fields_dict.rate.set_input(d.rate);
 	}
 	// Buy section
-	var purchase_head = new frappe.ui.FieldGroup({
+	const purchase_head = new frappe.ui.FieldGroup({
 		parent: page.body.find(".purchase-head-fields").get(0),
 		fields: [
 			F("supplier", "Supplier", "Link", { options: "Supplier", reqd: 1 }), CB(),
@@ -53,46 +53,49 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 	});
 	purchase_head.make();
 	function add_item_row(d) {
-		var fg = new_row(page.body.find(".purchase-item-rows"), row_fields(
+		const fg = new_row(page.body.find(".purchase-item-rows"), row_fields(
 			F("qty", "Qty", "Float", { reqd: 1 }), F("rate", "Rate", "Currency", { reqd: 1 })));
 		set_row(fg, d);
 		item_rows.push(fg);
 		return fg;
 	}
 	function collect(fgs, need) {
-		var out = [], incomplete = false;
+		const out = [];
+		let incomplete = false;
 		fgs.forEach(function (fg) {
-			var v = fg.get_values();
-			if (!v || !v.item_code || !v.qty || (need && !v[need])) { incomplete = true; return; }
+			const v = fg.get_values();
+			if (!v) { incomplete = true; return; }
+			// rows the user never started (no item, no qty) are skipped silently:
+			// there is no per-row remove mechanism, so they must not block submit
+			const empty = !v.item_code && !v.qty && !(need && v[need]);
+			if (empty) return;
+			if (!v.item_code || !v.qty || (need && !v[need])) { incomplete = true; return; }
 			out.push(v);
 		});
 		return { rows: out, incomplete: incomplete };
 	}
 	function incomplete_msg() {
-		frappe.msgprint({ message: __("Some rows are incomplete — fill every item, batch and qty row or remove it."), indicator: "orange" });
+		frappe.msgprint({ message: __("Some rows are incomplete — fill every started row."), indicator: "orange" });
 	}
 	function finish_create() { creating = false; create_btn.prop("disabled", false); frappe.unfreeze(); }
 	function on_create() {
 		if (creating) return;
-		var values = purchase_head.get_values();
+		const values = purchase_head.get_values();
 		if (!values) return;
-		var items = collect(item_rows);
+		const items = collect(item_rows);
 		if (items.incomplete) { incomplete_msg(); return; }
-		var payload = items.rows.map(function (v) { return { item_code: v.item_code, qty: v.qty, rate: v.rate }; });
+		const payload = items.rows.map(function (v) { return { item_code: v.item_code, qty: v.qty, rate: v.rate }; });
 		if (!payload.length) { frappe.msgprint(__("Enter at least one item.")); return; }
 		creating = true;
 		create_btn.prop("disabled", true);
 		frappe.freeze(__("Creating purchase…"));
-		frappe.call("frappe_livestock.api.settings.get_purchase_context")
-			.then(function (r) {
-				var c = r.message || {};
-				return frappe.call("frappe_livestock.api.purchase.create_full_purchase", {
-					company: c.company, supplier: values.supplier, warehouse: values.warehouse, items: payload,
-					invoice_number: values.invoice_number, invoice_date: values.invoice_date, mode_of_payment: values.mode_of_payment,
-				});
-			})
-			.then(function (r) {
-				var made = r.message || {};
+		frappe.call("frappe_livestock.api.settings.get_purchase_context").then(function (r) {
+			const c = r.message || {};
+			return frappe.call("frappe_livestock.api.purchase.create_full_purchase", {
+				company: c.company, supplier: values.supplier, warehouse: values.warehouse, items: payload,
+				invoice_number: values.invoice_number, invoice_date: values.invoice_date, mode_of_payment: values.mode_of_payment,
+			}).then(function (r) {
+				const made = r.message || {};
 				frappe.msgprint([
 					__("Purchase Order: {0}", [made.purchase_order]), __("Purchase Receipt: {0}", [made.purchase_receipt]),
 					__("Purchase Invoice: {0}", [made.purchase_invoice]), __("Payment Entry: {0}", [made.payment_entry]),
@@ -100,17 +103,26 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 				allocate_head.fields_dict.purchase_invoice.set_input(made.purchase_invoice);
 				load_invoice_lines(made.purchase_invoice);
 				finish_create();
-			})
-			.fail(finish_create);
+			});
+		}, function () {
+			// the create chain needs the context's company; surface the failure
+			// instead of silently re-enabling the button
+			frappe.msgprint({ message: __("Could not load purchase defaults; the purchase was not created."), indicator: "orange" });
+			finish_create();
+		}).fail(function () {
+			// create_full_purchase itself failed: the server error toast is
+			// already shown, just restore the button state
+			finish_create();
+		});
 	}
 	// Allocate section
-	var allocate_head = new frappe.ui.FieldGroup({
+	const allocate_head = new frappe.ui.FieldGroup({
 		parent: page.body.find(".allocate-head-fields").get(0),
 		fields: [F("purchase_invoice", "Purchase invoice", "Link", { options: "Purchase Invoice", reqd: 1, get_query: company_filter([["docstatus", "=", 1]]) })],
 	});
 	allocate_head.make();
 	function add_alloc_row(d) {
-		var fg = new_row(page.body.find(".allocate-item-rows"), row_fields(
+		const fg = new_row(page.body.find(".allocate-item-rows"), row_fields(
 			F("batch", "Livestock Batch", "Link", { options: "Livestock Batch", reqd: 1 }), F("qty", "Qty", "Float", { reqd: 1 })));
 		set_row(fg, d);
 		allocate_rows.push(fg);
@@ -122,11 +134,16 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 	function load_invoice_lines(invoice) {
 		if (!invoice) { frappe.msgprint(__("Pick a purchase invoice first.")); return; }
 		frappe.db.get_doc("Purchase Invoice", invoice).then(function (doc) {
+			// stale guard: the user may have switched the invoice while get_doc
+			// was in flight — bail instead of allocating old lines
+			if (allocate_head.fields_dict.purchase_invoice.get_value() !== invoice) return;
 			if (!doc || !doc.items || !doc.items.length) { frappe.msgprint(__("No item lines on this invoice.")); return; }
 			// Intentionally silent on failure: allocate rows stay empty and the
 			// user can add them by hand via "Add row (allocate)".
 			frappe.call("frappe_livestock.api.allocation.get_active_batches").then(function (r) {
-				var batches = r.message || [], single = batches.length === 1 ? batches[0].name : null;
+				if (allocate_head.fields_dict.purchase_invoice.get_value() !== invoice) return;
+				const batches = r.message || [];
+				const single = batches.length === 1 ? batches[0].name : null;
 				clear_alloc_rows();
 				doc.items.forEach(function (line) { add_alloc_row({ item_code: line.item_code, qty: line.qty, batch: single }); });
 			});
@@ -135,16 +152,17 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 		});
 	}
 	function is_overwrite_error(err) {
-		var s = "";
-		try { s = JSON.stringify(err) || ""; } catch (e) { s = ""; }
-		return (s + " " + ((err && err.message) || "") + " " + ((err && err.exc) || "")).indexOf("Confirm overwrite to proceed.") !== -1;
+		// structured signal: the server throws OverwriteRequired, whose class
+		// path appears in err.exc regardless of message wording
+		const s = String((err && err.exc) || "");
+		return s.indexOf("OverwriteRequired") !== -1;
 	}
 	function finish_allocate() { allocating = false; alloc_btn.prop("disabled", false); frappe.unfreeze(); }
 	function submit_allocations(invoice, allocations, force) {
 		frappe.call("frappe_livestock.api.allocation.split_purchase_to_batches", {
 			purchase_invoice: invoice, allocations: allocations, force: force ? 1 : 0,
 		}).then(function (r) {
-			var made = r.message || {};
+			const made = r.message || {};
 			frappe.msgprint({ message: __("Batch Cost {0} — cost per head is live on the dashboard.", [made.batch_cost]), indicator: "green" });
 			finish_allocate();
 		}).fail(function (err) {
@@ -156,11 +174,11 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 	}
 	function on_allocate() {
 		if (allocating) return;
-		var invoice = allocate_head.fields_dict.purchase_invoice.get_value();
+		const invoice = allocate_head.fields_dict.purchase_invoice.get_value();
 		if (!invoice) { frappe.msgprint(__("Pick a purchase invoice first.")); return; }
-		var allocations = collect(allocate_rows, "batch");
+		const allocations = collect(allocate_rows, "batch");
 		if (allocations.incomplete) { incomplete_msg(); return; }
-		var payload = allocations.rows.map(function (v) { return { item_code: v.item_code, batch: v.batch, qty: v.qty }; });
+		const payload = allocations.rows.map(function (v) { return { item_code: v.item_code, batch: v.batch, qty: v.qty }; });
 		if (!payload.length) { frappe.msgprint(__("Fill at least one row: item, batch and qty.")); return; }
 		allocating = true;
 		alloc_btn.prop("disabled", true);
@@ -168,13 +186,13 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 		submit_allocations(invoice, payload, 0);
 	}
 	// Buttons + per-visit context
-	var create_btn = $(page.set_primary_action(__("Create purchase"), on_create));
+	const create_btn = $(page.set_primary_action(__("Create purchase"), on_create));
 	page.add_inner_button(__("Add row"), add_item_row);
 	page.add_inner_button(__("Add row (allocate)"), add_alloc_row);
 	page.add_inner_button(__("Load invoice lines"), function () {
 		load_invoice_lines(allocate_head.fields_dict.purchase_invoice.get_value());
 	});
-	var alloc_btn = $(page.add_inner_button(__("Allocate to batches"), on_allocate, null, "primary"));
+	const alloc_btn = $(page.add_inner_button(__("Allocate to batches"), on_allocate, null, "primary"));
 	add_item_row();
 	add_alloc_row();
 	frappe.call("frappe_livestock.api.settings.get_purchase_context").then(function (r) {
@@ -186,7 +204,7 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 		if (ctx.mode_of_payment && !purchase_head.fields_dict.mode_of_payment.get_value()) purchase_head.fields_dict.mode_of_payment.set_value(ctx.mode_of_payment);
 		purchase_head.fields_dict.invoice_date.set_value(frappe.datetime.get_today());
 		if ((ctx.warnings || []).length) {
-			frappe.msgprint({ title: __("Setup warnings"), message: "<ul><li>" + ctx.warnings.join("</li><li>") + "</li></ul>", indicator: "orange" });
+			frappe.msgprint({ title: __("Setup warnings"), message: "<ul><li>" + ctx.warnings.map(frappe.utils.escape_html).join("</li><li>") + "</li></ul>", indicator: "orange" });
 		}
 	}).fail(function () {
 		purchase_head.fields_dict.invoice_date.set_value(frappe.datetime.get_today());

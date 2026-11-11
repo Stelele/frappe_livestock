@@ -93,7 +93,7 @@ class TestLivestockBatch(IntegrationTestCase):
 		self.assertEqual(second.name, "Broiler 2026-10-28 2")
 		self.assertEqual(third.name, "Broiler 2026-10-28 3")
 
-	def test_sold_is_not_hand_editable(self):
+	def test_sold_adopts_db_value_on_save(self):
 		batch = frappe.get_doc(
 			{
 				"doctype": "Livestock Batch",
@@ -102,11 +102,13 @@ class TestLivestockBatch(IntegrationTestCase):
 				"quantity_placed": 500,
 			}
 		).insert()
-		batch.sold = 3
-		with self.assertRaisesRegex(
-			frappe.exceptions.ValidationError, "maintained automatically"
-		):
-			batch.save()
+		# a concurrent sale writes `sold` directly to the DB (update_modified=False
+		# is exactly what the sales hook does); a save of a doc loaded before
+		# that adopts the DB value instead of failing
+		frappe.db.set_value("Livestock Batch", batch.name, "sold", 2, update_modified=False)
+		batch.sold = 0
+		batch.save()
+		self.assertEqual(frappe.db.get_value("Livestock Batch", batch.name, "sold"), 2)
 
 	def test_quantity_placed_is_set_only_once(self):
 		_ensure_batch_manager()

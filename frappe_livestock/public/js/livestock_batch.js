@@ -116,7 +116,7 @@ function show_buy_dialog(frm) {
 			if ((ctx.warnings || []).length) {
 				frappe.msgprint({
 					title: __("Setup warnings"),
-					message: "<ul><li>" + ctx.warnings.join("</li><li>") + "</li></ul>",
+					message: "<ul><li>" + ctx.warnings.map(frappe.utils.escape_html).join("</li><li>") + "</li></ul>",
 					indicator: "orange",
 				});
 			}
