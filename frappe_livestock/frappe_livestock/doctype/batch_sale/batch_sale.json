@@ -31,7 +31,8 @@
    "fieldname": "posting_date",
    "fieldtype": "Date",
    "label": "Posting Date",
-   "default": "Today"
+   "default": "Today",
+   "reqd": 1
   },
   {
    "fieldname": "items",

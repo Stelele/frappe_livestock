@@ -15,17 +15,29 @@ class LivestockBatch(Document):
 			suffix += 1
 		self.name = name
 
+	def insert(self, *args, **kwargs):
+		try:
+			return super().insert(*args, **kwargs)
+		except frappe.DuplicateEntryError:
+			# lost the autoname race against a concurrent insert of the same
+			# type/start_date — re-run autoname for the next suffix and retry once
+			self.name = None
+			self.autoname()
+			return super().insert(*args, **kwargs)
+
 	def validate(self):
 		# capture the saved values before this write, so on_update can tell
 		# whether the stocking purchase link / housing actually changed
 		self._stocking_pi_before = frappe.db.get_value(self.doctype, self.name, "stocking_purchase_invoice")
 		self._housing_before = frappe.db.get_value(self.doctype, self.name, "housing")
 		# `sold` is maintained automatically by the sales allocation hook
-		# (which writes via frappe.db.set_value, bypassing validate);
-		# any hand edit through insert/save is rejected.
+		# (which writes via frappe.db.set_value, bypassing validate).
+		# A save of a document loaded before a concurrent sale would carry a
+		# stale in-memory `sold` and be wrongly rejected, so the DB value is
+		# authoritative: adopt it instead of throwing.
 		old_sold = frappe.db.get_value(self.doctype, self.name, "sold")
-		if int(self.sold or 0) != int(old_sold or 0):
-			frappe.throw("Sold is maintained automatically and cannot be edited manually.")
+		if not self.is_new() and int(self.sold or 0) != int(old_sold or 0):
+			self.sold = int(old_sold or 0)
 
 	def on_update(self):
 		# when the stocking purchase link is set (and changed), allocate that
