@@ -102,9 +102,10 @@ class TestLivestockBatch(IntegrationTestCase):
 				"quantity_placed": 500,
 			}
 		).insert()
-		# a concurrent sale writes `sold` directly to the DB; a save of a doc
-		# loaded before that adopts the DB value instead of failing
-		frappe.db.set_value("Livestock Batch", batch.name, "sold", 2)
+		# a concurrent sale writes `sold` directly to the DB (update_modified=False
+		# is exactly what the sales hook does); a save of a doc loaded before
+		# that adopts the DB value instead of failing
+		frappe.db.set_value("Livestock Batch", batch.name, "sold", 2, update_modified=False)
 		batch.sold = 0
 		batch.save()
 		self.assertEqual(frappe.db.get_value("Livestock Batch", batch.name, "sold"), 2)
