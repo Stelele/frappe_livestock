@@ -2,6 +2,13 @@ import frappe
 from frappe.utils import flt
 
 
+class OverwriteRequired(frappe.ValidationError):
+	"""Raised when replacing Batch Cost rows needs the caller's explicit force.
+
+	Client code matches on the class name in err.exc (a structured signal) —
+	do not rely on the message wording."""
+
+
 def _invoice_rates(purchase_invoice):
 	"""Weighted-average rate per item_code.
 
@@ -98,7 +105,8 @@ def split_purchase_to_batches(purchase_invoice, allocations, force=None):
 		if old_keys != new_keys:
 			if not force:
 				frappe.throw(
-					f"Batch Cost {doc.name} already exists with different rows. Confirm overwrite to proceed."
+					f"Batch Cost {doc.name} already exists with different rows. Confirm overwrite to proceed.",
+					OverwriteRequired,
 				)
 			old_total = flt(sum(flt((row.amount if hasattr(row, 'amount') else row.get('amount')) or 0) for row in doc.items), 2)
 			new_total = flt(sum(flt(row.get('amount') or 0) for row in rows), 2)
