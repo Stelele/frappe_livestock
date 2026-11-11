@@ -9,7 +9,7 @@ repos:
     hooks:
       - id: trailing-whitespace
         files: "frappe_livestock.*"
-        exclude: ".*json$|.*txt$|.*csv|.*md|.*svg"
+.*csv$|.*md|.*svg"
       - id: check-merge-conflict
       - id: check-ast
       - id: check-json
