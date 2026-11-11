@@ -231,6 +231,8 @@ def _update_item_prices(items):
 def create_full_purchase(company, supplier, warehouse, items, invoice_number=None, invoice_date=None, mode_of_payment="Cash"):
 	"""Create full purchase cycle: Purchase Order → Purchase Receipt → Purchase Invoice → Payment Entry.
 
+	Gated to System Manager / Livestock Manager.
+
 	args:
 	        company: Company name
 	        supplier: Supplier name
@@ -240,6 +242,7 @@ def create_full_purchase(company, supplier, warehouse, items, invoice_number=Non
 	        invoice_date: (optional) Invoice date (YYYY-MM-DD), defaults to today
 	        mode_of_payment: (optional) Mode of Payment, defaults to "Cash". Payment is always in full.
 	"""
+	frappe.only_for(("System Manager", "Livestock Manager"))
 	items = frappe.parse_json(items) or []
 	if not invoice_date:
 		invoice_date = frappe.utils.nowdate()
@@ -254,12 +257,9 @@ def create_full_purchase(company, supplier, warehouse, items, invoice_number=Non
 	pi = _create_purchase_invoice(pr, invoice_number, invoice_date)
 	pe = _create_payment_entry(pi, invoice_date, company, mode_of_payment)
 
-	for doc, doctype in [
-		(pr, "Purchase Receipt"),
-		(pi, "Purchase Invoice"),
-		(pe, "Payment Entry"),
-	]:
-		frappe.db.set_value(doctype, doc.name, "posting_date", invoice_date)
+	# NOTE: posting_date is set at document construction (see the _create_*
+	# helpers) — rewriting it after submit via frappe.db.set_value would
+	# desynchronize the GL/stock ledger rows generated at submit time.
 
 	_update_item_prices(items)
 
@@ -275,9 +275,12 @@ def create_full_purchase(company, supplier, warehouse, items, invoice_number=Non
 def cancel_full_purchase(purchase_invoice):
 	"""Cancel full purchase cycle: Payment Entry → Purchase Invoice → Purchase Receipt → Purchase Order.
 
+	Gated to System Manager / Livestock Manager (cancels submitted financial documents).
+
 	args:
 	        purchase_invoice: Name of the Purchase Invoice to cancel
 	"""
+	frappe.only_for(("System Manager", "Livestock Manager"))
 	if not purchase_invoice:
 		frappe.throw("purchase_invoice is required")
 
@@ -350,6 +353,7 @@ def amend_full_purchase(
 	        invoice_date: (optional) Invoice date (YYYY-MM-DD), defaults to today
 	        mode_of_payment: (optional) Mode of Payment, defaults to "Cash". Payment is always in full.
 	"""
+	frappe.only_for(("System Manager", "Livestock Manager"))
 	items = frappe.parse_json(items) or []
 	if not purchase_invoice:
 		frappe.throw("purchase_invoice is required")

@@ -8,6 +8,7 @@ def get_batch_summary(batch):
 	Pure delegation and shaping layer: all numbers come from the
 	Livestock Batch controller methods, assembled here under stable keys.
 	"""
+	frappe.only_for(("System Manager", "Livestock Dashboard", "Livestock Manager"))
 	doc = frappe.get_doc("Livestock Batch", batch)
 	return {
 		"name": doc.name,
