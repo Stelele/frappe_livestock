@@ -34,10 +34,8 @@ def allocate_sales_to_ready_batches_for_type(batch_type, qty, voucher_type=None,
 	for row in rows:
 		if remaining <= 0:
 			break
-		batch = frappe.get_doc("Livestock Batch", row["name"])  # read-only: ceiling only
-		# serialize the ceiling read/write against concurrent submissions so two
-		# invoices cannot both read the same remaining head and oversell
 		frappe.db.sql("select name from `tabLivestock Batch` where name = %s for update", row["name"])
+		# read-only: ceiling only — fetched once, after taking the row lock
 		batch = frappe.get_doc("Livestock Batch", row["name"])
 		ceiling = batch.surviving() - int(batch.sold or 0)
 		if ceiling <= 0:
@@ -95,16 +93,16 @@ def _record_batch_sale(batch_type, voucher_doctype, voucher_no, allocated_per_ba
 
 	for batch_name, qty in allocated_per_batch.items():
 		# rows are replaced per rate group: identity = (item_code, batch,
-		# unit amount), so another rate group's row for the same batch survives
-		sale.items = [
-			row
-			for row in sale.items
-			if not (
-				row.item_code == finished_item
-				and row.batch == batch_name
-				and flt(flt(row.amount or 0) / (int(row.qty or 1)), 9) == flt(rate or 0)
-			)
-		]
+		# unit amount). The unit amount is recovered from the stored amount and
+		# compared with a tolerance — amount round-trips through a decimal
+		# column, so exact float equality is fragile.
+		def same_rate_group(row):
+			if row.item_code != finished_item or row.batch != batch_name:
+				return False
+			unit = flt(row.amount or 0) / (int(row.qty or 1))
+			return abs(unit - flt(rate or 0)) <= 0.01
+
+		sale.items = [row for row in sale.items if not same_rate_group(row)]
 		sale.append(
 			"items",
 			{
