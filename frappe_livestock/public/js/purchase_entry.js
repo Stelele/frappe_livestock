@@ -153,9 +153,11 @@ frappe.pages["purchase-entry"].on_page_load = function (wrapper) {
 	}
 	function is_overwrite_error(err) {
 		// structured signal: the server throws OverwriteRequired, whose class
-		// path appears in err.exc regardless of message wording
-		const s = String((err && err.exc) || "");
-		return s.indexOf("OverwriteRequired") !== -1;
+		// name appears in err.exc (full traceback, developer mode) or
+		// err.exc_type (production) — match either, never the message wording
+		const exc = String((err && err.exc) || "");
+		const exc_type = String((err && err.exc_type) || "");
+		return exc.indexOf("OverwriteRequired") !== -1 || exc_type.indexOf("OverwriteRequired") !== -1;
 	}
 	function finish_allocate() { allocating = false; alloc_btn.prop("disabled", false); frappe.unfreeze(); }
 	function submit_allocations(invoice, allocations, force) {

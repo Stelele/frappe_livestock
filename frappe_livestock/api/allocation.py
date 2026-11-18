@@ -22,11 +22,16 @@ def _invoice_rates(purchase_invoice):
 		as_dict=True,
 	)
 	agg = {}
+	rate_fallback = {}
 	for row in rows:
 		total_qty, total_amount = agg.get(row["item_code"], (0.0, 0.0))
 		qty = flt(row["qty"] or 0)
+		rate_fallback[row["item_code"]] = flt(row["rate"] or 0)
 		agg[row["item_code"]] = (total_qty + qty, total_amount + qty * flt(row["rate"] or 0))
-	return {item: amount / total if total else 0.0 for item, (total, amount) in agg.items()}
+	return {
+		item: (amount / total) if total else rate_fallback[item]
+		for item, (total, amount) in agg.items()
+	}
 
 
 def _row_key(row):
